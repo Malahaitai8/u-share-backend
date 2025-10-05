@@ -1,0 +1,83 @@
+# docker-compose.yml
+
+version: '3.8' # 指定文件格式的版本
+
+services:
+  # --- 1. 应用数据库 (SQL Server) ---
+  # 这是你的App用来存储用户数据、积分等信息的主数据库
+  db:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: u-share-db
+    environment:
+      ACCEPT_EULA: "Y" # 必须接受最终用户许可协议
+      SA_PASSWORD: "Ushare!2025" # !! 请将这里修改为一个健壮、复杂的密码
+    ports:
+      - "1433:1433" # 将数据库的1433端口暴露给你自己的电脑，方便连接
+    volumes:
+      - sql_server_data:/var/opt/mssql # 将数据库数据持久化，防止容器删除后数据丢失
+
+  # --- 2. Kong API 网关设置 ---
+  # Kong 自己也需要一个数据库来存储它的路由、服务等配置信息
+  # 我们用PostgreSQL作为Kong的数据库
+
+  # 2a. Kong的数据库 (PostgreSQL)
+  kong-db:
+    image: postgres:13
+    container_name: kong-db
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: "Ushare!2025" # !! 请将这里修改为一个安全的密码
+    volumes:
+      - kong_db_data:/var/lib/postgresql/data # 持久化Kong的配置数据
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong", "-d", "kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2b. Kong 数据库迁移 (这个服务只运行一次，用于初始化Kong的数据库)
+  kong-migration:
+    image: kong:latest
+    depends_on:
+      kong-db:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db # 这里的值是上面PostgreSQL服务的名称
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: "Ushare!2025" # !! 请使用和上面相同的密码
+    command: "kong migrations bootstrap"
+    restart: on-failure
+
+  # 2c. Kong API 网关本体
+  kong-gateway:
+    image: kong:latest
+    container_name: kong-gateway
+    depends_on:
+      kong-migration:
+        condition: service_completed_successfully
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: "Ushare!2025" # !! 请使用和上面相同的密码
+      KONG_PROXY_ACCESS_LOG: /dev/stdout # 将代理日志输出到容器日志
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout # 将管理日志输出到容器日志
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001 # Kong的配置管理API
+      KONG_ADMIN_GUI_URL: http://localhost:8002 # Kong的管理界面UI
+    ports:
+      # 代理端口 - 未来前端应用将请求发送到这里
+      - "8000:8000" # HTTP 流量
+      - "8443:8443" # HTTPS 流量
+      # 管理端口 - 供我们开发者配置Kong使用
+      - "8001:8001" # Admin API
+      - "8002:8002" # Admin GUI
+
+# --- 3. 数据卷定义 ---
+# 声明上面服务中用到的数据卷，由Docker来管理，确保数据安全
+volumes:
+  sql_server_data:
+  kong_db_data:
