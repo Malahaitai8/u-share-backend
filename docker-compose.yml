@@ -10,6 +10,16 @@ services:
     networks:
       - ushare_network
 
+  image_rec_service:
+    build:
+      context: ./services/image_rec_service     # Dockerfile 所在路径
+    container_name: image_rec_service
+    restart: unless-stopped
+    ports:
+      - "8082:80"       # 左侧宿主机端口可改；右侧 80 必须与 Dockerfile 中 EXPOSE 保持一致
+    networks:
+      - ushare_network  # 与其它微服务同一个网络名称
+
   db:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: u-share-db
