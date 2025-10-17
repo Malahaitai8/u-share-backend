@@ -20,6 +20,18 @@ services:
     networks:
       - ushare_network  # 与其它微服务同一个网络名称
 
+  nlp_service:
+    build:
+      context: ./services/nlp_service
+    container_name: nlp_service
+    restart: unless-stopped
+    env_file:
+      - ./services/nlp_service/.env
+    ports:
+      - "8083:80"
+    networks:
+      - ushare_network
+
   db:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: u-share-db
