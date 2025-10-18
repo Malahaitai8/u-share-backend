@@ -1,13 +1,37 @@
 # app/main.py
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from jose import JWTError, jwt
 
 from . import crud, models, schemas, security
-from .database import SessionLocal, engine
+from .database import SessionLocal, engine, MASTER_DATABASE_URL
+from sqlalchemy import create_engine as create_sqlalchemy_engine, text
+
+# 创建数据库（如果不存在）
+def create_database_if_not_exists():
+    try:
+        # 先连接到master数据库
+        master_engine = create_sqlalchemy_engine(MASTER_DATABASE_URL, connect_args={"timeout": 30})
+        with master_engine.connect() as conn:
+            # 检查数据库是否存在
+            result = conn.execute(text("SELECT name FROM sys.databases WHERE name = 'UFunUShareDB'"))
+            if not result.fetchone():
+                # 创建数据库
+                conn.execute(text("CREATE DATABASE UFunUShareDB"))
+                print("数据库 UFunUShareDB 创建成功")
+            else:
+                print("数据库 UFunUShareDB 已存在")
+        master_engine.dispose()
+    except Exception as e:
+        print(f"创建数据库时出错: {e}")
+        # 如果创建失败，继续尝试连接现有数据库
+
+# 创建数据库（如果不存在）
+create_database_if_not_exists()
 
 # 创建数据库表
 models.Base.metadata.create_all(bind=engine)
@@ -28,6 +52,15 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json"
+)
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有源，生产环境应该指定具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- 依赖项 ---

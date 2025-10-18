@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 
 # 安装基础依赖和SQL Server ODBC驱动
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends --fix-missing \
         ca-certificates \
         curl \
         gnupg \

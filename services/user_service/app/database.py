@@ -21,6 +21,9 @@ encoded_password = urllib.parse.quote_plus(DB_PASSWORD)
 # 构建最终的数据库连接字符串 (Connection String)
 SQLALCHEMY_DATABASE_URL = f"mssql+pyodbc://{DB_USERNAME}:{encoded_password}@{DB_SERVER_NAME}/{DB_NAME}?driver={DB_DRIVER}"
 
+# 用于创建数据库的连接字符串（连接到master数据库）
+MASTER_DATABASE_URL = f"mssql+pyodbc://{DB_USERNAME}:{encoded_password}@{DB_SERVER_NAME}/master?driver={DB_DRIVER}"
+
 
 # --- SQLAlchemy 引擎和会话设置 ---
 
