@@ -15,7 +15,9 @@
       <!-- 顶部logo区域 -->
       <div class="logo-section">
         <div class="app-icon">
-          <el-icon class="icon"><Recycle /></el-icon>
+          <div class="garbage-icon">
+            <el-icon class="garbage-icon-svg"><Delete /></el-icon>
+          </div>
         </div>
         <h1 class="app-title">U分U享</h1>
         <p class="app-subtitle">智能垃圾分类，共享绿色生活</p>
@@ -207,10 +209,21 @@ const goToRegister = () => {
     justify-content: center;
     margin: 0 auto 24px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    position: relative;
     
-    .icon {
-      font-size: 36px;
-      color: #4CAF50;
+    .garbage-icon {
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      .garbage-icon-svg {
+        font-size: 48px;
+        color: #4CAF50;
+      }
     }
   }
   
@@ -418,8 +431,10 @@ const goToRegister = () => {
       width: 72px;
       height: 72px;
       
-      .icon {
-        font-size: 32px;
+      .garbage-icon {
+        .garbage-icon-svg {
+          font-size: 42px;
+        }
       }
     }
     
