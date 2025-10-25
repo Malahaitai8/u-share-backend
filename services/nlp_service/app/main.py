@@ -1,4 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
+
+import httpx
 from pydantic import BaseModel
 from typing import Optional
 import os
@@ -118,3 +121,85 @@ async def recognize_text(body: TextInput):
     """Mock 文本分类接口"""
     category = classify_text(body.text)
     return {"input_text": body.text, "category": category}
+
+# ----------------------------------------------------------------------------
+#       大模型（百度千帆）问答接口
+# ----------------------------------------------------------------------------
+
+class QuestionRequest(BaseModel):
+    question: str
+
+
+@app.post("/ask-ai-direct")
+async def ask_ai_direct_about_garbage(request: QuestionRequest):
+    """调用百度千帆大模型进行垃圾分类问答"""
+
+    # 1. 获取凭证
+    ak = os.getenv("QIANFAN_AK")
+    sk = os.getenv("QIANFAN_SK")
+    if not ak or not sk:
+        return JSONResponse(status_code=500, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    # 2. 获取 access_token
+    token_url = "https://aip.baidubce.com/oauth/2.0/token"
+    token_params = {
+        "grant_type": "client_credentials",
+        "client_id": ak,
+        "client_secret": sk,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            token_resp = await client.post(token_url, params=token_params)
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    if token_resp.status_code != 200:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    try:
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+    except Exception:
+        access_token = None
+
+    if not access_token:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    # 3. 调用聊天 API
+    chat_url = f"https://qianfan.baidubce.com/v2/chat/completions?access_token={access_token}"
+    system_prompt = "你是一个专业的垃圾分类指导助手，请根据用户的问题，准确地回答垃圾如何分类。如果问题与垃圾分类无关，请礼貌地拒绝回答。"
+
+    payload = {
+        "model": "ERNIE-Bot-turbo",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.question},
+        ],
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            chat_resp = await client.post(chat_url, headers=headers, json=payload)
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    if chat_resp.status_code != 200:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    try:
+        chat_json = chat_resp.json()
+        # 尝试多种路径拿回答
+        answer = chat_json.get("result")
+        if not answer and "choices" in chat_json:
+            answer = chat_json["choices"][0]["message"]["content"]
+    except Exception:
+        answer = None
+
+    if not answer:
+        return JSONResponse(status_code=502, content={"error": "AI助手暂时无法回答，请稍后再试"})
+
+    # 成功
+    return {"answer": answer}

@@ -32,6 +32,18 @@ services:
     networks:
       - ushare_network
 
+  ai_service:
+    build:
+      context: ./services/ai_service
+    container_name: ai_service
+    restart: unless-stopped
+    env_file:
+      - ./services/ai_service/.env
+    ports:
+      - "8084:80"
+    networks:
+      - ushare_network
+
   db:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: u-share-db
