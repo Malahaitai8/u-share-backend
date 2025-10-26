@@ -173,7 +173,7 @@ export const recognizeImage = async (imageFile) => {
  */
 export const getRecognitionHistory = (limit = 10) => {
   return request({
-    url: '/api/classification/history',
+    url: '/classification/history',
     method: 'get',
     params: { limit }
   })
@@ -186,7 +186,7 @@ export const getRecognitionHistory = (limit = 10) => {
  */
 export const saveRecognitionRecord = (data) => {
   return request({
-    url: '/api/classification/record',
+    url: '/classification/record',
     method: 'post',
     data
   })

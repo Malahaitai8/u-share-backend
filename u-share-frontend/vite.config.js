@@ -27,6 +27,11 @@ export default defineConfig({
         target: 'http://localhost:8082',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/image/, '')
+      },
+      '/ai': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ai/, '')
       }
     }
   }

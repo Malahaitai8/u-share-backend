@@ -1,5 +1,8 @@
 <template>
   <div class="image-recognition-container">
+    <!-- AI对话框 -->
+    <AIChatDialog v-model="showAIChat" />
+    
     <!-- 顶部导航栏 -->
     <div class="nav-bar">
       <el-button 
@@ -11,7 +14,14 @@
         <el-icon><ArrowLeft /></el-icon>
       </el-button>
       <h1 class="nav-title">图像识别</h1>
-      <div class="nav-placeholder"></div>
+      <el-button
+        class="ai-chat-button"
+        @click="openAIChat"
+        circle
+        size="small"
+      >
+        <el-icon><ChatDotRound /></el-icon>
+      </el-button>
     </div>
 
     <!-- 主要内容区域 -->
@@ -22,8 +32,8 @@
           <div class="icon-wrapper">
             <el-icon class="camera-icon"><Camera /></el-icon>
           </div>
-          <h3 class="card-title">AI图像识别</h3>
-          <p class="card-subtitle">拍照或上传图片识别垃圾分类</p>
+          <h3 class="card-title">图像识别</h3>
+          <p class="card-subtitle">上传图片识别垃圾分类</p>
         </div>
 
         <!-- 图片预览区域 -->
@@ -179,6 +189,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { recognizeImage } from '@/api/classification'
+import AIChatDialog from '@/components/AIChatDialog.vue'
 
 const router = useRouter()
 
@@ -187,9 +198,14 @@ const previewImage = ref('')
 const recognizing = ref(false)
 const result = ref(null)
 const uploadedFile = ref(null)
+const showAIChat = ref(false)
 
 const goBack = () => {
   router.back()
+}
+
+const openAIChat = () => {
+  showAIChat.value = true
 }
 
 const triggerUpload = () => {
@@ -289,7 +305,8 @@ const resultIconClass = computed(() => {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   
-  .back-button {
+  .back-button,
+  .ai-chat-button {
     background: rgba(255, 255, 255, 0.2);
     border: none;
     color: white;
@@ -301,15 +318,17 @@ const resultIconClass = computed(() => {
     }
   }
   
+  .ai-chat-button {
+    .el-icon {
+      font-size: 18px;
+    }
+  }
+  
   .nav-title {
     font-size: 18px;
     font-weight: 600;
     color: white;
     margin: 0;
-  }
-  
-  .nav-placeholder {
-    width: 40px;
   }
 }
 
@@ -776,4 +795,5 @@ const resultIconClass = computed(() => {
   animation-delay: 0.2s;
 }
 </style>
+
 

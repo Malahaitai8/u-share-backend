@@ -78,7 +78,7 @@
           </div>
           <div class="tip-item">
             <span class="tip-number">3</span>
-            <span class="tip-text">图像识别：拍摄或上传清晰的垃圾照片</span>
+            <span class="tip-text">图像识别：上传清晰的垃圾照片</span>
           </div>
         </div>
       </div>
