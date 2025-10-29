@@ -32,6 +32,20 @@ def _haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
+
+def _format_duration(seconds: int) -> str:
+    """将秒转换为友好的时间显示格式"""
+    if seconds < 60:
+        return f"{seconds}秒"
+    
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+    
+    if remaining_seconds == 0:
+        return f"{minutes}分钟"
+    else:
+        return f"{minutes}分{remaining_seconds}秒"
+
 # ---------------- 加载 CSV / Excel 站点数据 --------------------
 from pathlib import Path
 import csv, pandas as pd
@@ -128,21 +142,42 @@ async def nearest_dustbin(lng: float = Query(...), lat: float = Query(...)):
     """根据用户坐标，返回最近垃圾桶及步行距离时间"""
     logger.info(f"NEAREST called lng={lng} lat={lat} bins={len(_DUSTBINS)} key={'set' if AMAP_KEY!='YOUR_AMAP_KEY' else 'none'}")
 
-    # 预计算所有站点的直线距离并按升序取前5
+    if not _DUSTBINS:
+        raise HTTPException(status_code=500, detail="无可用垃圾桶数据")
+
+    # 计算所有站点的直线距离并排序
     candidates = sorted(
         (
             (_haversine(lng, lat, db["lng"], db["lat"]), db)
             for db in _DUSTBINS
         ),
         key=lambda x: x[0],
-    )[:5]
+    )
 
+    # 获取最近的垃圾桶
+    nearest_dist, nearest_db = candidates[0]
+    logger.info(f"NEAREST_BIN name={nearest_db['name']} straight_dist={round(nearest_dist, 1)}m")
+
+    # 如果直线距离小于10米，直接返回，不调用高德API
+    if nearest_dist < 10:
+        logger.info(f"NEARBY <10m, skip API call")
+        return {
+            "nearby": True,
+            "message": f"您距离垃圾站「{nearest_db['name']}」不到10米，请就近投放",
+            "distance": round(nearest_dist, 1),
+            "duration": None,
+            "dustbin": nearest_db,
+            "nav_url": None,
+            "deeplink": None,
+        }
+
+    # 距离>=10米，调用高德API获取步行路线（对前5个候选点）
     best = None
-
-    # 如果配置了高德 Key，则仅对前 5 个候选站点调用外部接口，减少耗时
     if AMAP_KEY != "YOUR_AMAP_KEY":
+        logger.info(f"DISTANCE >=10m, calling Amap API for top 5 candidates")
         try:
-            async with httpx.AsyncClient(timeout=3) as client:
+            # 增加超时时间到10秒，避免Swagger调用时因网络稍慢而超时
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 async def fetch(db):
                     url = (
                         "https://restapi.amap.com/v3/direction/walking"
@@ -150,51 +185,73 @@ async def nearest_dustbin(lng: float = Query(...), lat: float = Query(...)):
                     )
                     try:
                         r = await client.get(url)
-                        logger.info(f"AMAP_REQ {url} status={r.status_code}")
-                        return db, r.json()
-                    except Exception:
+                        logger.info(f"AMAP_REQ to={db['name']} status={r.status_code}")
+                        if r.status_code != 200:
+                            logger.error(f"AMAP_ERROR status={r.status_code} body={r.text[:200]}")
+                            return db, None
+                        json_data = r.json()
+                        if json_data.get("status") != "1":
+                            logger.error(f"AMAP_API_ERROR to={db['name']} info={json_data.get('info')} infocode={json_data.get('infocode')}")
+                        return db, json_data
+                    except httpx.TimeoutException as e:
+                        logger.error(f"AMAP_TIMEOUT to={db['name']} error={e}")
+                        return db, None
+                    except Exception as e:
+                        logger.error(f"AMAP_REQUEST_ERROR to={db['name']} error={type(e).__name__}: {e}")
                         return db, None
 
-                results = await asyncio.gather(*(fetch(db) for _, db in candidates))
+                # 只对前5个候选调用API
+                top5_candidates = candidates[:5]
+                results = await asyncio.gather(*(fetch(db) for _, db in top5_candidates))
 
                 for db, data in results:
                     if not data or data.get("status") != "1":
                         continue
-                    route = data["route"]["paths"][0]
-                    dist = float(route["distance"])
-                    dur = float(route["duration"])
-                    if best is None or dist < best[0]:
-                        best = (dist, dur, db)
+                    try:
+                        route = data["route"]["paths"][0]
+                        dist = float(route["distance"])
+                        dur = float(route["duration"])
+                        logger.info(f"AMAP_SUCCESS to={db['name']} dist={dist}m dur={dur}s")
+                        if best is None or dist < best[0]:
+                            best = (dist, dur, db)
+                    except (KeyError, IndexError, ValueError) as e:
+                        logger.error(f"AMAP_PARSE_ERROR db={db['name']} error={e} data={data}")
+                        continue
         except Exception as e:
-            logger.warning(f"AMAP_FAIL {e}")
+            logger.error(f"AMAP_FAIL {type(e).__name__}: {e}", exc_info=True)
             best = None
 
     if best is None:
-        # 无高德结果，直接提示最近垃圾桶
-        db = candidates[0][1]
+        # 无高德结果，返回最近垃圾桶的直线距离估算
+        logger.warning(f"NO_AMAP_RESULT, fallback to nearest bin")
         return {
             "nearby": False,
-            "message": f"最近垃圾桶：{db['name']}，暂无法获取步行路线，请就近投放。",
-            "dustbin": db,
+            "message": f"最近垃圾桶：{nearest_db['name']}（约{round(nearest_dist, 1)}米），暂无法获取步行路线，请就近投放。",
+            "distance": round(nearest_dist, 1),
+            "duration": None,
+            "dustbin": nearest_db,
+            "nav_url": None,
+            "deeplink": None,
         }
 
+    # 获取到高德API的结果
     dist_m = round(best[0], 1)
     dur_s = int(best[1])
     db = best[2]
-    if dist_m <= 10:
-        return {
-            "nearby": True,
-            "message": f"垃圾桶就在\"{db['name']}\"附近",
-            "dustbin": db,
-        }
-
-    nav_url = f"https://uri.amap.com/navigation?to={db['lng']},{db['lat']},{db['name']}&mode=walk&src=ust-share"
+    
+    # 格式化时间显示
+    duration_text = _format_duration(dur_s)
+    
+    nav_url = f"https://uri.amap.com/navigation?to={db['lng']},{db['lat']},{db['name']}&mode=walk&src=u-share"
     deeplink = (
         f"amapuri://route/plan/?dlat={db['lat']}&dlon={db['lng']}"
         f"&dname={db['name']}&t=1&sourceApplication=u-share"
     )
+    
+    logger.info(f"RETURN_ROUTE to={db['name']} dist={dist_m}m dur={dur_s}s ({duration_text})")
     return {
         "nearby": False,
+        "message": f"步行至「{db['name']}」约{dist_m}米，需时{duration_text}",
         "distance": dist_m,
         "duration": dur_s,
         "dustbin": db,
