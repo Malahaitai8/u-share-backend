@@ -44,6 +44,18 @@ services:
     networks:
       - ushare_network
 
+  guide_service:
+    build:
+      context: ./services/guide_service
+    container_name: guide_service
+    restart: unless-stopped
+    env_file:
+      - ./services/guide_service/.env
+    ports:
+      - "8085:80"
+    networks:
+      - ushare_network
+
   db:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: u-share-db
