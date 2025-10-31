@@ -95,7 +95,7 @@
             <span class="feature-label">社区活动</span>
           </div>
           
-          <div class="feature-item" @click="showComingSoon('投放引导')">
+          <div class="feature-item" @click="goToGuide">
             <div class="feature-icon">
               <el-icon><Guide /></el-icon>
             </div>
@@ -166,6 +166,10 @@ const handleLogout = async () => {
 
 const goToClassification = () => {
   router.push('/classification')
+}
+
+const goToGuide = () => {
+  router.push('/guide')
 }
 
 const showComingSoon = (featureName) => {

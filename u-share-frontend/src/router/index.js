@@ -68,6 +68,15 @@ const routes = [
       title: '图像识别',
       requiresAuth: true 
     }
+  },
+  {
+    path: '/guide',
+    name: 'Guide',
+    component: () => import('@/views/Guide.vue'),
+    meta: { 
+      title: '投放引导',
+      requiresAuth: true 
+    }
   }
 ]
 
