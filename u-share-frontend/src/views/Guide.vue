@@ -64,7 +64,7 @@
       <div class="info-header" @click="toggleCard">
         <div class="header-left">
           <el-icon class="info-icon"><Location /></el-icon>
-          <span class="info-title">最近垃圾桶</span>
+          <span class="info-title">最近垃圾站点</span>
         </div>
         <el-icon class="expand-icon" :class="{ 'expanded': cardExpanded }">
           <ArrowUp />
