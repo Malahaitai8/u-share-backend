@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AMAP_KEY = os.getenv("AMAP_API_KEY", "YOUR_AMAP_KEY")
+AMAP_KEY = os.getenv("AMAP_API_KEY", "2c96a8ea85096b49090551970ed6199c")
 
 # ------------------- 工具函数 ----------------------
 from math import radians, sin, cos, sqrt, atan2
@@ -186,7 +186,7 @@ class RouteResp(BaseModel):
 @app.get("/nearest", response_model=RouteResp)
 async def nearest_dustbin(lng: float = Query(...), lat: float = Query(...)):
     """根据用户坐标，返回最近垃圾桶及步行距离时间"""
-    logger.info(f"NEAREST called lng={lng} lat={lat} bins={len(_DUSTBINS)} key={'set' if AMAP_KEY!='YOUR_AMAP_KEY' else 'none'}")
+    logger.info(f"NEAREST called lng={lng} lat={lat} bins={len(_DUSTBINS)} key={'set' if AMAP_KEY!='dea7cc14dad7340b0c4e541dfa3d27b7' else 'none'}")
 
     if not _DUSTBINS:
         raise HTTPException(status_code=500, detail="无可用垃圾桶数据")
@@ -219,7 +219,7 @@ async def nearest_dustbin(lng: float = Query(...), lat: float = Query(...)):
 
     # 距离>=10米，调用高德API获取步行路线（对前5个候选点）
     best = None
-    if AMAP_KEY != "YOUR_AMAP_KEY":
+    if AMAP_KEY and AMAP_KEY.strip():
         logger.info(f"DISTANCE >=10m, calling Amap API for top 5 candidates")
         try:
             # 增加超时时间到10秒，避免Swagger调用时因网络稍慢而超时

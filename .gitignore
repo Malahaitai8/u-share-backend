@@ -64,6 +64,10 @@ venv.bak/
 *.swo
 *~
 
+# Excel temporary files
+~$*.xlsx
+~$*.xls
+
 # Docker
 .dockerignore
 docker-compose.override.yml

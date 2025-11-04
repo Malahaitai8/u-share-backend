@@ -133,7 +133,7 @@ import { getDustbins, getNearestDustbin } from '@/api/guide'
 const router = useRouter()
 
 // 高德地图API Key - 支持从环境变量读取
-const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || 'dea7cc14dad7340b0c4e541dfa3d27b7'
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || '2c96a8ea85096b49090551970ed6199c'
 
 // 响应式数据
 const loading = ref(false)

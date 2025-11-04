@@ -53,6 +53,8 @@ services:
       - ./services/guide_service/.env
     ports:
       - "8085:80"
+    volumes:
+      - ./services/guide_service/data:/code/data
     networks:
       - ushare_network
 
