@@ -10,6 +10,13 @@ import base64
 import asyncio
 import requests
 from dotenv import load_dotenv
+import tempfile
+import logging
+from pydub import AudioSegment
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -74,9 +81,63 @@ def classify_text(text: str) -> str:
                 return category
     return "其他垃圾"
 
+def convert_audio_to_wav(audio_bytes: bytes, source_format: str) -> tuple[bytes, int]:
+    """
+    将音频转换为 WAV 格式（百度 ASR 支持的格式）
+    返回: (wav_bytes, sample_rate)
+    """
+    temp_input = None
+    temp_output = None
+    
+    try:
+        # 创建临时文件保存原始音频
+        with tempfile.NamedTemporaryFile(suffix=f'.{source_format}', delete=False) as tmp_input:
+            tmp_input.write(audio_bytes)
+            temp_input = tmp_input.name
+        
+        # 加载音频（pydub会自动检测格式）
+        logger.info(f"正在转换音频格式: {source_format} -> wav")
+        audio = AudioSegment.from_file(temp_input, format=source_format)
+        
+        # 设置参数：单声道，16kHz采样率，16位深度
+        audio = audio.set_channels(1)
+        audio = audio.set_frame_rate(16000)
+        audio = audio.set_sample_width(2)  # 16位 = 2字节
+        
+        # 导出为 WAV
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_output:
+            temp_output = tmp_output.name
+        
+        audio.export(temp_output, format='wav')
+        
+        # 读取转换后的 WAV 文件
+        with open(temp_output, 'rb') as f:
+            wav_bytes = f.read()
+        
+        logger.info(f"音频转换成功: 原始大小={len(audio_bytes)}, WAV大小={len(wav_bytes)}")
+        return wav_bytes, 16000
+        
+    except Exception as e:
+        logger.error(f"音频转换失败: {e}")
+        raise HTTPException(status_code=400, detail=f"音频格式转换失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_input and os.path.exists(temp_input):
+            try:
+                os.unlink(temp_input)
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
+        if temp_output and os.path.exists(temp_output):
+            try:
+                os.unlink(temp_output)
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
+
+
 @app.post("/recognize/voice")
 async def recognize_voice(file: UploadFile = File(...)):
-    """调用百度 ASR 进行语音识别"""
+    """调用百度 ASR 进行语音识别，支持多种音频格式"""
     try:
         audio_bytes = await file.read()
     except Exception:
@@ -85,12 +146,44 @@ async def recognize_voice(file: UploadFile = File(...)):
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="文件内容为空")
 
+    # 获取文件格式
+    file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else 'webm'
+    content_type = file.content_type or ''
+    
+    logger.info(f"收到音频文件: filename={file.filename}, content_type={content_type}, size={len(audio_bytes)}")
+    
+    # 确定音频格式
+    if 'webm' in content_type or file_extension == 'webm':
+        source_format = 'webm'
+    elif 'ogg' in content_type or file_extension == 'ogg':
+        source_format = 'ogg'
+    elif 'mp3' in content_type or file_extension == 'mp3':
+        source_format = 'mp3'
+    elif 'wav' in content_type or file_extension == 'wav':
+        source_format = 'wav'
+    elif 'mp4' in content_type or file_extension in ['m4a', 'mp4']:
+        source_format = 'mp4'
+    else:
+        source_format = file_extension
+    
+    # 百度 ASR 支持的格式: pcm, wav, amr, m4a
+    # 如果是 webm, ogg, mp3 等格式，需要转换为 wav
+    need_conversion = source_format in ['webm', 'ogg', 'mp3', 'opus']
+    
+    if need_conversion:
+        logger.info(f"检测到 {source_format} 格式，需要转换为 WAV")
+        audio_bytes, sample_rate = convert_audio_to_wav(audio_bytes, source_format)
+        format_for_baidu = 'wav'
+    else:
+        format_for_baidu = source_format
+        sample_rate = 16000  # 默认采样率
+
     token = await get_baidu_token()
 
     speech_base64 = base64.b64encode(audio_bytes).decode()
     payload = {
-        "format": file.filename.split('.')[-1],
-        "rate": 16000,
+        "format": format_for_baidu,
+        "rate": sample_rate,
         "dev_pid": 1537,  # 普通话
         "speech": speech_base64,
         "len": len(audio_bytes),
@@ -107,12 +200,17 @@ async def recognize_voice(file: UploadFile = File(...)):
     try:
         result = await asyncio.to_thread(_call_asr)
     except Exception as e:
+        logger.error(f"百度ASR调用失败: {e}")
         raise HTTPException(status_code=502, detail=f"百度ASR接口调用失败: {e}")
 
     if result.get("err_no", 0) != 0:
-        raise HTTPException(status_code=502, detail=f"识别失败: {result}")
+        error_msg = result.get("err_msg", "未知错误")
+        logger.error(f"百度ASR识别失败: err_no={result.get('err_no')}, err_msg={error_msg}")
+        raise HTTPException(status_code=502, detail=f"语音识别失败: {error_msg}")
 
     text = "".join(result.get("result", []))
+    logger.info(f"识别成功: {text}")
+    
     category = classify_text(text)
     return {"result": text, "category": category}
 
@@ -203,3 +301,51 @@ async def ask_ai_direct_about_garbage(request: QuestionRequest):
 
     # 成功
     return {"answer": answer}
+
+# -----------------------------------------------------------------------------
+#                      诊断 / 健康检查接口
+# -----------------------------------------------------------------------------
+
+@app.get("/diagnose")
+async def diagnose_service():
+    """一次性检查常见的依赖与外部连通性。
+
+    返回示例::
+        {
+            "baidu_token": "ok",          # 或 token_error / timeout
+            "ffmpeg": "6.1.0",            # 版本号，或 not_found
+        }
+    """
+
+    # 1. 检查百度鉴权
+    try:
+        _ = await get_baidu_token()
+        token_status = "ok"
+    except HTTPException as he:
+        token_status = f"token_error: {he.detail}"
+    except Exception as e:
+        token_status = f"token_error: {str(e)}"
+
+    # 2. 检查 ffmpeg 是否存在
+    import shutil, subprocess
+
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            first_line = stdout.decode(errors="ignore").split("\n", 1)[0]
+            ffmpeg_status = first_line.strip()
+        except Exception as e:
+            ffmpeg_status = f"ffmpeg_error: {e}"
+    else:
+        ffmpeg_status = "not_found"
+
+    return {
+        "baidu_token": token_status,
+        "ffmpeg": ffmpeg_status,
+    }

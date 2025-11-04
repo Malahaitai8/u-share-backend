@@ -74,20 +74,35 @@
       <!-- 卡片内容（展开时显示） -->
       <div v-show="cardExpanded" class="info-content">
         <div class="info-name">{{ nearestInfo.dustbin.name }}</div>
-        <div v-if="nearestInfo.distance" class="info-distance">
-          <span class="distance-label">距离：</span>
-          <span class="distance-value">{{ nearestInfo.distance }}米</span>
+        
+        <!-- 如果是近距离（<10米），突出显示提示信息 -->
+        <div v-if="nearestInfo.nearby" class="nearby-alert">
+          <div class="nearby-icon">📍</div>
+          <div class="nearby-text">
+            <div class="nearby-title">已到达附近</div>
+            <div class="nearby-distance">距离不到 {{ nearestInfo.distance }}米</div>
+            <div class="nearby-tip">请就近投放垃圾</div>
+          </div>
         </div>
-        <div v-if="nearestInfo.duration" class="info-duration">
-          <span class="duration-label">预计时间：</span>
-          <span class="duration-value">约{{ formatDuration(nearestInfo.duration) }}</span>
-        </div>
-        <div v-if="nearestInfo.message" class="info-message">
-          {{ nearestInfo.message }}
-        </div>
-        <div class="info-buttons">
+        
+        <!-- 如果距离较远（≥10米），显示详细导航信息 -->
+        <template v-else>
+          <div v-if="nearestInfo.distance" class="info-distance">
+            <span class="distance-label">距离：</span>
+            <span class="distance-value">{{ nearestInfo.distance }}米</span>
+          </div>
+          <div v-if="nearestInfo.duration" class="info-duration">
+            <span class="duration-label">预计时间：</span>
+            <span class="duration-value">约{{ formatDuration(nearestInfo.duration) }}</span>
+          </div>
+          <div v-if="nearestInfo.message" class="info-message">
+            {{ nearestInfo.message }}
+          </div>
+        </template>
+        
+        <!-- 只有距离≥10米且有导航链接时才显示导航按钮 -->
+        <div v-if="!nearestInfo.nearby && (nearestInfo.nav_url || nearestInfo.deeplink)" class="info-buttons">
           <el-button 
-            v-if="nearestInfo.nav_url || nearestInfo.deeplink" 
             type="primary" 
             size="small" 
             class="nav-button"
@@ -306,13 +321,13 @@ const initMap = async () => {
     }
     
     // 创建地图实例
-    // 不设置默认中心点，等待定位成功后再设置（避免使用硬编码坐标）
-    // 使用北京市大致的中心坐标作为初始显示位置（仅在定位失败时使用）
-    const beijingCenter = [116.3974, 39.9093] // 北京市中心大致坐标
+    // 使用北京交通大学的坐标作为初始显示位置
+    // 北京交通大学（本部）：东经116.351，北纬39.954
+    const bjtuCenter = [116.351, 39.954] // 北京交通大学坐标
     
     map.value = new AMap.Map('map-container', {
-      zoom: 16,
-      center: beijingCenter, // 临时中心点，定位成功后会更新
+      zoom: 17, // 提高初始缩放级别，更聚焦校园
+      center: bjtuCenter, // 默认显示交大位置
       mapStyle: 'amap://styles/normal',
       viewMode: '2D'
     })
@@ -355,13 +370,17 @@ const initMap = async () => {
     // 添加地图点击事件监听（用于手动选择位置）
     map.value.on('click', handleMapClick)
 
-    // 获取用户位置
-    await getUserLocation()
+    // 获取用户位置（不等待完成，避免阻塞地图加载）
+    getUserLocation().then(() => {
+      console.log('用户位置获取完成')
+    }).catch((error) => {
+      console.error('获取用户位置时发生错误:', error)
+    })
     
-    // 加载垃圾桶数据
+    // 加载垃圾桶数据（并行加载，不依赖定位）
     await loadDustbins()
     
-    console.log('地图初始化完成')
+    console.log('地图初始化完成，地图已显示在北京交通大学范围')
     
   } catch (error) {
     console.error('地图初始化失败:', error)
@@ -409,6 +428,8 @@ const verifyLocationWithGeocoder = async (lng, lat) => {
 // 获取用户位置（使用高德地图定位插件，自动进行坐标转换）
 const getUserLocation = () => {
   return new Promise((resolve) => {
+    console.log('开始获取用户位置...')
+    
     // 优先使用高德地图定位插件（自动处理坐标转换）
     if (window.AMap && window.AMap.Geolocation && map.value) {
       try {
@@ -528,7 +549,16 @@ const getUserLocation = () => {
             }).catch(() => resolve())
           } else {
             console.error('高德定位失败:', result)
+            const errorInfo = result.info || result.message || '未知错误'
+            console.warn('高德定位错误信息:', errorInfo)
+            
+            // 显示友好的错误提示
+            if (errorInfo.includes('Geolocation permission denied')) {
+              ElMessage.warning('定位权限被拒绝，请在浏览器设置中允许定位权限')
+            }
+            
             // 如果高德定位失败，尝试使用浏览器原生定位（需要手动转换坐标）
+            console.log('尝试使用浏览器原生定位...')
             fallbackToBrowserGeolocation(resolve)
           }
         })
@@ -547,11 +577,14 @@ const getUserLocation = () => {
 // 回退到浏览器原生定位（需要手动转换坐标）
 const fallbackToBrowserGeolocation = (resolve) => {
   if (!navigator.geolocation) {
-    ElMessage.warning('浏览器不支持定位功能')
+    console.warn('浏览器不支持地理定位API')
+    ElMessage.warning('您的浏览器不支持定位功能，将使用默认位置（北京交通大学）')
     resolve()
     return
   }
 
+  console.log('使用浏览器原生定位API...')
+  
   navigator.geolocation.getCurrentPosition(
     async (position) => {
       const { longitude, latitude, accuracy } = position.coords
@@ -621,8 +654,33 @@ const fallbackToBrowserGeolocation = (resolve) => {
       resolve()
     },
     (error) => {
-      console.error('获取位置失败:', error)
-      ElMessage.warning('获取位置失败，将使用默认位置')
+      console.error('浏览器原生定位失败:', error)
+      let message = '获取位置失败，将使用默认位置（北京交通大学）'
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          message = '定位权限被拒绝。请点击地址栏的定位图标，允许此网站访问您的位置'
+          console.warn('用户拒绝了定位权限请求')
+          break
+        case error.POSITION_UNAVAILABLE:
+          message = '位置信息不可用，请检查设备定位设置'
+          console.warn('位置信息不可用')
+          break
+        case error.TIMEOUT:
+          message = '定位请求超时，请重试'
+          console.warn('定位请求超时')
+          break
+        default:
+          console.warn('未知的定位错误:', error)
+      }
+      
+      ElMessage({
+        message,
+        type: 'warning',
+        duration: 5000,
+        showClose: true
+      })
+      
       resolve()
     },
     {
@@ -1608,7 +1666,20 @@ onMounted(() => {
     }
   }, true)
   
+  // 初始化地图
   initMap()
+  
+  // 延迟3秒后，如果还没有获取到用户位置，提示用户授予定位权限
+  setTimeout(() => {
+    if (!userPosition.value) {
+      ElMessage({
+        message: '💡 提示：为了获得更精准的导航，请在浏览器中允许定位权限',
+        type: 'info',
+        duration: 6000,
+        showClose: true
+      })
+    }
+  }, 3000)
 })
 
 // 组件卸载
@@ -1875,7 +1946,50 @@ onUnmounted(() => {
       font-size: 15px;
       font-weight: 600;
       color: #333;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    
+    // 近距离提示样式（<10米）
+    .nearby-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+      
+      .nearby-icon {
+        font-size: 32px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      
+      .nearby-text {
+        flex: 1;
+        color: white;
+        
+        .nearby-title {
+          font-size: 16px;
+          font-weight: 700;
+          margin-bottom: 6px;
+          letter-spacing: 0.5px;
+        }
+        
+        .nearby-distance {
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 4px;
+          opacity: 0.95;
+        }
+        
+        .nearby-tip {
+          font-size: 13px;
+          opacity: 0.9;
+          font-weight: 500;
+        }
+      }
     }
 
     .info-distance {

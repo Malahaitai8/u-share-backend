@@ -62,10 +62,35 @@ else:
 # 正则与 _coord_to_decimal 定义（保持已存在代码）
 
 
-def _coord_to_decimal(coord_str: str) -> float | None:
-    """将经纬度字符串转换为十进制度数"""
+def _coord_to_decimal(coord_str: str | float | int) -> float | None:
+    """将经纬度字符串或数字转换为十进制度数
+    优先处理十进制格式（表格中常用的格式）
+    支持格式：
+    1. 数字类型：直接返回（最常用）
+    2. 十进制度数格式（字符串）："116.395645" 
+    3. 度分秒格式：116°23′45″ 或 116°23′（兼容格式）
+    """
+    if coord_str is None:
+        return None
+    
+    # 如果是数字类型，直接返回（最常见的情况）
+    if isinstance(coord_str, (int, float)):
+        return float(coord_str)
+    
+    # 转换为字符串
+    coord_str = str(coord_str).strip()
     if not coord_str:
         return None
+    
+    # 优先尝试解析为十进制度数（表格中通常是这种格式）
+    try:
+        decimal = float(coord_str)
+        return decimal
+    except (ValueError, TypeError):
+        pass
+    
+    # 如果十进制解析失败，尝试解析度分秒格式（兼容旧数据）
+    # 度分秒格式：116°23′45″
     match = re.search(r"(\d{2,3})°(\d{2,3})′(\d{2,3})″", coord_str)
     if match:
         degrees = int(match.group(1))
@@ -73,46 +98,67 @@ def _coord_to_decimal(coord_str: str) -> float | None:
         seconds = int(match.group(3))
         decimal = degrees + minutes / 60 + seconds / 3600
         return decimal
+    
+    # 度分格式：116°23′
     match = re.search(r"(\d{2,3})°(\d{2,3})′", coord_str)
     if match:
         degrees = int(match.group(1))
         minutes = int(match.group(2))
         decimal = degrees + minutes / 60
         return decimal
-    match = re.search(r"(\d{2,3})°(\d{2,3})′(\d{2,3})″", coord_str)
-    if match:
-        degrees = int(match.group(1))
-        minutes = int(match.group(2))
-        seconds = int(match.group(3))
-        decimal = degrees + minutes / 60 + seconds / 3600
-        return decimal
+    
+    # 如果都解析失败，返回None
     return None
 
 
 def _load_dustbins() -> list[dict]:
     if not DATA_PATH.exists():
+        logger.warning(f"数据文件不存在: {DATA_PATH}")
         return []
+    
+    logger.info(f"正在加载站点数据从: {DATA_PATH}")
+    
     # 读取文件
-    if DATA_PATH.suffix.lower() == ".xlsx":
-        records = pd.read_excel(DATA_PATH).to_dict(orient="records")
-    else:
-        with DATA_PATH.open("r", encoding="utf-8") as f:
-            records = list(csv.DictReader(f))
+    try:
+        if DATA_PATH.suffix.lower() == ".xlsx":
+            records = pd.read_excel(DATA_PATH).to_dict(orient="records")
+        else:
+            with DATA_PATH.open("r", encoding="utf-8") as f:
+                records = list(csv.DictReader(f))
+    except Exception as e:
+        logger.error(f"读取数据文件失败: {e}")
+        return []
 
     bins: list[dict] = []
-    for row in records:
-        lng = _coord_to_decimal(row.get("经度") or row.get("lng"))
-        lat = _coord_to_decimal(row.get("纬度") or row.get("lat"))
+    skipped_count = 0
+    
+    for idx, row in enumerate(records):
+        # 尝试多个可能的列名
+        lng_raw = row.get("经度") or row.get("lng") or row.get("longitude") or row.get("经")
+        lat_raw = row.get("纬度") or row.get("lat") or row.get("latitude") or row.get("纬")
+        
+        lng = _coord_to_decimal(lng_raw)
+        lat = _coord_to_decimal(lat_raw)
+        
         # 若经纬度疑似颠倒（经度应绝对值>纬度），自动交换
         if lng is not None and lat is not None and abs(lng) < abs(lat):
+            logger.info(f"第{idx+1}行: 经纬度疑似颠倒，自动交换 ({lng}, {lat}) -> ({lat}, {lng})")
             lng, lat = lat, lng
+        
         if lng is None or lat is None:
+            skipped_count += 1
+            logger.debug(f"第{idx+1}行: 跳过无效数据 - 经度: {lng_raw}, 纬度: {lat_raw}")
             continue
+        
+        name = row.get("站点名称") or row.get("name") or row.get("名称") or f"站点{len(bins)+1}"
         bins.append({
-            "name": row.get("站点名称") or row.get("name") or "未知站点",
+            "name": name,
             "lng": lng,
             "lat": lat,
         })
+        logger.debug(f"成功加载站点: {name} ({lng}, {lat})")
+    
+    logger.info(f"站点数据加载完成: 成功加载 {len(bins)} 个站点，跳过 {skipped_count} 条无效记录")
     return bins
 
 

@@ -67,3 +67,4 @@ venv.bak/
 # Docker
 .dockerignore
 docker-compose.override.yml
+services/guide_service/前后端对接说明.md

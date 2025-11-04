@@ -277,9 +277,21 @@ const processRecording = async () => {
   try {
     // 创建音频 Blob
     const audioBlob = new Blob(audioChunks.value, { type: 'audio/webm' })
+    
+    // 创建 File 对象，指定文件名（后端会根据扩展名判断格式）
+    const audioFile = new File([audioBlob], `recording_${Date.now()}.webm`, { 
+      type: 'audio/webm' 
+    })
+
+    console.log('录音完成:', {
+      size: audioFile.size,
+      type: audioFile.type,
+      name: audioFile.name,
+      duration: `${(duration / 1000).toFixed(1)}秒`
+    })
 
     // 调用语音识别API
-    const response = await speechToText(audioBlob)
+    const response = await speechToText(audioFile)
 
     // 处理识别结果
     recognizedText.value = response.data.name
