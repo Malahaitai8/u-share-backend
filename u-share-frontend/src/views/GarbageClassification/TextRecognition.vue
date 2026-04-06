@@ -147,7 +147,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { classifyByText } from '@/api/classification'
+import { classifyByText, addClassificationRecord } from '@/api/classification'
 import AIChatDialog from '@/components/AIChatDialog.vue'
 
 const router = useRouter()
@@ -194,6 +194,9 @@ const handleRecognize = async () => {
         history.value.pop()
       }
     }
+
+    // 添加分类记录并获得积分
+    await addClassificationRecord(response.data.type, 'text')
 
     ElMessage.success('识别成功')
   } catch (error) {

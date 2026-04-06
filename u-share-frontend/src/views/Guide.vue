@@ -74,6 +74,9 @@
       <!-- 卡片内容（展开时显示） -->
       <div v-show="cardExpanded" class="info-content">
         <div class="info-name">{{ nearestInfo.dustbin.name }}</div>
+        <div v-if="nearestInfo.dustbin.description" class="info-description">
+          {{ nearestInfo.dustbin.description }}
+        </div>
         
         <!-- 如果是近距离（<10米），突出显示提示信息 -->
         <div v-if="nearestInfo.nearby" class="nearby-alert">
@@ -1124,7 +1127,6 @@ const showInfoWindow = (marker, dustbin) => {
   }
 
   try {
-    // 转义HTML，防止XSS攻击
     const escapeHtml = (text) => {
       if (!text) return ''
       const div = document.createElement('div')
@@ -1132,9 +1134,11 @@ const showInfoWindow = (marker, dustbin) => {
       return div.innerHTML
     }
 
+    const description = dustbin.description || ''
     const content = `
       <div class="custom-info-window">
         <div class="info-window-title">${escapeHtml(dustbin.name || '垃圾桶')}</div>
+        ${description ? `<div class="info-window-desc">${escapeHtml(description)}</div>` : ''}
       </div>
     `
 
@@ -1946,7 +1950,14 @@ onUnmounted(() => {
       font-size: 15px;
       font-weight: 600;
       color: #333;
+      margin-bottom: 6px;
+    }
+
+    .info-description {
+      font-size: 13px;
+      color: #666;
       margin-bottom: 12px;
+      line-height: 1.4;
     }
     
     // 近距离提示样式（<10米）
@@ -2108,7 +2119,7 @@ onUnmounted(() => {
 <style>
 /* 自定义信息窗口样式 - 固定大小，美观可见 */
 .custom-info-window {
-  width: 110px;
+  width: 140px;
   min-height: 36px;
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.98);
@@ -2118,6 +2129,7 @@ onUnmounted(() => {
   text-align: center;
   pointer-events: none;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
 }
@@ -2136,6 +2148,14 @@ onUnmounted(() => {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.info-window-desc {
+  font-size: 10px;
+  color: #666;
+  line-height: 1.3;
+  margin-top: 4px;
+  word-break: break-all;
 }
 
 /* 自定义消息提示样式 */

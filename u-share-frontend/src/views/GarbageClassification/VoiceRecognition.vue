@@ -168,7 +168,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { speechToText } from '@/api/classification'
+import { speechToText, addClassificationRecord } from '@/api/classification'
 import AIChatDialog from '@/components/AIChatDialog.vue'
 
 const router = useRouter()
@@ -296,6 +296,9 @@ const processRecording = async () => {
     // 处理识别结果
     recognizedText.value = response.data.name
     result.value = response.data
+
+    // 添加分类记录并获得积分
+    await addClassificationRecord(response.data.type, 'voice')
 
     ElMessage.success('语音识别成功')
   } catch (error) {

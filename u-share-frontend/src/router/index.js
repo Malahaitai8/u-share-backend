@@ -77,6 +77,15 @@ const routes = [
       title: '投放引导',
       requiresAuth: true 
     }
+  },
+  {
+    path: '/stats',
+    name: 'Stats',
+    component: () => import('@/views/Stats.vue'),
+    meta: { 
+      title: '数据统计',
+      requiresAuth: true 
+    }
   }
 ]
 

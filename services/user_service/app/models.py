@@ -1,6 +1,7 @@
 # app/models.py
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.sql import func
 from .database import Base
 
 class User(Base):
@@ -9,3 +10,23 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+
+
+class ClassificationRecord(Base):
+    __tablename__ = "classification_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    garbage_type = Column(String(50), nullable=True)
+    recognition_method = Column(String(20), nullable=True)
+    points_earned = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class UserPoints(Base):
+    __tablename__ = "user_points"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    current_points = Column(Integer, default=0)
+    total_points = Column(Integer, default=0)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
