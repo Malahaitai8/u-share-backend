@@ -74,7 +74,7 @@
             <span class="feature-label">积分商城</span>
           </div>
           
-          <div class="feature-item" @click="showComingSoon('数据统计')">
+          <div class="feature-item" @click="goToStats">
             <div class="feature-icon">
               <el-icon><DataAnalysis /></el-icon>
             </div>
@@ -106,19 +106,15 @@
 
       <!-- 今日数据 -->
       <div class="stats-section">
-        <h4 class="section-title">今日数据</h4>
-        <div class="stats-grid">
+        <h4 class="section-title">本周数据</h4>
+        <div class="stats-grid two-col">
           <div class="stat-item">
-            <div class="stat-number">0</div>
+            <div class="stat-number">{{ todayStats.classifications }}</div>
             <div class="stat-label">分类次数</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">0</div>
-            <div class="stat-label">获得积分</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-number">0</div>
-            <div class="stat-label">环保贡献</div>
+            <div class="stat-number">{{ todayStats.points }}</div>
+            <div class="stat-label">剩余积分</div>
           </div>
         </div>
       </div>
@@ -130,9 +126,11 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
+import { getUserStats } from '@/api/classification'
 import { 
   User, 
   SwitchButton, 
@@ -147,6 +145,27 @@ import {
 
 const router = useRouter()
 const userStore = useUserStore()
+
+const todayStats = ref({
+  classifications: 0,
+  points: 0
+})
+
+const fetchTodayStats = async () => {
+  try {
+    const stats = await getUserStats()
+    todayStats.value = {
+      classifications: stats.week_classifications || 0,
+      points: stats.current_points || 0
+    }
+  } catch (error) {
+    console.error('获取今日数据失败:', error)
+  }
+}
+
+onMounted(() => {
+  fetchTodayStats()
+})
 
 const handleLogout = async () => {
   try {
@@ -170,6 +189,10 @@ const goToClassification = () => {
 
 const goToGuide = () => {
   router.push('/guide')
+}
+
+const goToStats = () => {
+  router.push('/stats')
 }
 
 const showComingSoon = (featureName) => {
@@ -403,6 +426,10 @@ const showComingSoon = (featureName) => {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+    
+    &.two-col {
+      grid-template-columns: repeat(2, 1fr);
+    }
     
     .stat-item {
       background: rgba(255, 255, 255, 0.95);

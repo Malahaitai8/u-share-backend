@@ -188,7 +188,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { recognizeImage } from '@/api/classification'
+import { recognizeImage, addClassificationRecord } from '@/api/classification'
 import AIChatDialog from '@/components/AIChatDialog.vue'
 
 const router = useRouter()
@@ -265,6 +265,9 @@ const handleRecognize = async () => {
     
     // 处理识别结果
     result.value = response.data
+    
+    // 添加分类记录并获得积分
+    await addClassificationRecord(response.data.type, 'image')
     
     ElMessage.success('识别成功')
   } catch (error) {

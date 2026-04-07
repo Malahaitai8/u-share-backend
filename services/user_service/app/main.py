@@ -137,3 +137,29 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
     它会解析请求头中的Bearer Token，验证其有效性，并返回对应的用户信息。
     """
     return current_user
+
+
+@app.get("/stats/my", response_model=schemas.UserStats, tags=["Stats"], summary="获取当前用户统计数据")
+async def get_my_stats(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取当前用户的分类统计数据"""
+    stats = crud.get_user_stats(db, current_user.id)
+    return stats
+
+
+@app.get("/stats/leaderboard", response_model=schemas.LeaderboardInfo, tags=["Stats"], summary="获取排行榜信息")
+async def get_leaderboard(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取当前用户的排行榜信息（超过多少百分比的用户）"""
+    percentile = crud.get_user_rank_percentile(db, current_user.id)
+    return {"rank_percentile": percentile}
+
+
+@app.post("/stats/record", response_model=schemas.ClassificationRecord, tags=["Stats"], summary="添加分类记录")
+async def add_classification(
+    garbage_type: str,
+    recognition_method: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """添加一条分类记录并获得积分"""
+    record = crud.add_classification_record(db, current_user.id, garbage_type, recognition_method, 1)
+    return record

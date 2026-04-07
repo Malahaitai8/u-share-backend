@@ -6,6 +6,34 @@ import axios from 'axios'
  */
 
 /**
+ * 添加分类记录并获得积分
+ * @param {string} garbageType - 垃圾类型
+ * @param {string} method - 识别方式 (text/voice/image)
+ * @returns {Promise} 添加结果
+ */
+export const addClassificationRecord = async (garbageType, method) => {
+  return request({
+    url: '/stats/record',
+    method: 'post',
+    params: {
+      garbage_type: garbageType,
+      recognition_method: method
+    }
+  })
+}
+
+/**
+ * 获取用户统计数据
+ * @returns {Promise} 统计数据
+ */
+export const getUserStats = async () => {
+  return request({
+    url: '/stats/my',
+    method: 'get'
+  })
+}
+
+/**
  * 文字识别垃圾分类
  * @param {string} text - 垃圾名称文本
  * @returns {Promise} 识别结果

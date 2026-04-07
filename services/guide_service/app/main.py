@@ -46,18 +46,34 @@ def _format_duration(seconds: int) -> str:
     else:
         return f"{minutes}分{remaining_seconds}秒"
 
+
+def _build_bin_description(bin_types: dict) -> str:
+    """根据垃圾桶类型生成描述（B风格：说明式）"""
+    categories = []
+    for cat in ["可回收", "厨余", "有害", "其他"]:
+        count = bin_types.get(cat, 0)
+        if count and count > 0:
+            categories.append(cat)
+    
+    if not categories:
+        return "无分类垃圾桶"
+    
+    if len(categories) >= 4:
+        return "配有可回收、厨余、有害、其他垃圾桶"
+    
+    return "配有" + "、".join(categories) + "垃圾桶"
+
 # ---------------- 加载 CSV / Excel 站点数据 --------------------
 from pathlib import Path
 import csv, pandas as pd
 
-# 支持通过环境变量自定义路径；若默认 CSV 不存在则尝试同名 .xlsx
-_default_csv = Path("/code/data/dustbins.csv")
-_default_xlsx = Path("/code/data/dustbins.xlsx")
+# 支持通过环境变量自定义路径
+_default_xlsx = Path("/code/data/dustbins_with_types.xlsx")
 env_path = os.getenv("DUSTBIN_CSV")
 if env_path:
     DATA_PATH = Path(env_path)
 else:
-    DATA_PATH = _default_csv if _default_csv.exists() else _default_xlsx
+    DATA_PATH = _default_xlsx
 
 # 正则与 _coord_to_decimal 定义（保持已存在代码）
 
@@ -118,13 +134,8 @@ def _load_dustbins() -> list[dict]:
     
     logger.info(f"正在加载站点数据从: {DATA_PATH}")
     
-    # 读取文件
     try:
-        if DATA_PATH.suffix.lower() == ".xlsx":
-            records = pd.read_excel(DATA_PATH).to_dict(orient="records")
-        else:
-            with DATA_PATH.open("r", encoding="utf-8") as f:
-                records = list(csv.DictReader(f))
+        records = pd.read_excel(DATA_PATH).to_dict(orient="records")
     except Exception as e:
         logger.error(f"读取数据文件失败: {e}")
         return []
@@ -133,30 +144,46 @@ def _load_dustbins() -> list[dict]:
     skipped_count = 0
     
     for idx, row in enumerate(records):
-        # 尝试多个可能的列名
-        lng_raw = row.get("经度") or row.get("lng") or row.get("longitude") or row.get("经")
-        lat_raw = row.get("纬度") or row.get("lat") or row.get("latitude") or row.get("纬")
+        lng_raw = row.get("经度") or row.get("lng") or row.get("longitude")
+        lat_raw = row.get("纬度") or row.get("lat") or row.get("latitude")
         
         lng = _coord_to_decimal(lng_raw)
         lat = _coord_to_decimal(lat_raw)
         
-        # 若经纬度疑似颠倒（经度应绝对值>纬度），自动交换
         if lng is not None and lat is not None and abs(lng) < abs(lat):
-            logger.info(f"第{idx+1}行: 经纬度疑似颠倒，自动交换 ({lng}, {lat}) -> ({lat}, {lng})")
             lng, lat = lat, lng
         
         if lng is None or lat is None:
             skipped_count += 1
-            logger.debug(f"第{idx+1}行: 跳过无效数据 - 经度: {lng_raw}, 纬度: {lat_raw}")
             continue
         
-        name = row.get("站点名称") or row.get("name") or row.get("名称") or f"站点{len(bins)+1}"
+        name = row.get("站点名称") or row.get("name") or f"站点{len(bins)+1}"
+        
+        def safe_int(val):
+            if val is None:
+                return 0
+            try:
+                if pd.isna(val):
+                    return 0
+                return int(val)
+            except (ValueError, TypeError):
+                return 0
+
+        bin_types = {
+            "其他": safe_int(row.get("其他")),
+            "可回收": safe_int(row.get("可回收")),
+            "厨余": safe_int(row.get("厨余")),
+            "有害": safe_int(row.get("有害")),
+        }
+        description = _build_bin_description(bin_types)
+        
         bins.append({
             "name": name,
             "lng": lng,
             "lat": lat,
+            "bin_types": bin_types,
+            "description": description,
         })
-        logger.debug(f"成功加载站点: {name} ({lng}, {lat})")
     
     logger.info(f"站点数据加载完成: 成功加载 {len(bins)} 个站点，跳过 {skipped_count} 条无效记录")
     return bins
@@ -168,6 +195,8 @@ class Dustbin(BaseModel):
     name: str
     lng: float
     lat: float
+    bin_types: dict
+    description: str
 
 @app.get("/dustbins", response_model=list[Dustbin])
 async def list_dustbins():
