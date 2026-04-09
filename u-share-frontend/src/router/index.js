@@ -86,6 +86,15 @@ const routes = [
       title: '数据统计',
       requiresAuth: true 
     }
+  },
+  {
+    path: '/incentive',
+    name: 'IncentiveCenter',
+    component: () => import('@/views/IncentiveCenter.vue'),
+    meta: {
+      title: '核心激励模块',
+      requiresAuth: true
+    }
   }
 ]
 

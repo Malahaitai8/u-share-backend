@@ -1,5 +1,5 @@
 <template>
-  <div class="classification-container">
+  <div class="classification-container with-bottom-nav">
     <!-- 顶部导航栏 -->
     <div class="nav-bar">
       <el-button 
@@ -86,11 +86,14 @@
 
     <!-- 底部安全区域 -->
     <div class="safe-area-bottom"></div>
+
+    <BottomNav />
   </div>
 </template>
 
 <script setup>
 import { useRouter } from 'vue-router'
+import BottomNav from '@/components/BottomNav.vue'
 
 const router = useRouter()
 
@@ -316,8 +319,12 @@ const goToImageRecognition = () => {
 
 // 底部安全区域
 .safe-area-bottom {
-  height: 34px;
-  background: rgba(0, 0, 0, 0.05);
+  height: 88px;
+  background: transparent;
+}
+
+.with-bottom-nav {
+  padding-bottom: 88px;
 }
 
 // 响应式设计

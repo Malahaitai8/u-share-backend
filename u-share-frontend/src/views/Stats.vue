@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-stats-container">
+  <div class="mobile-stats-container with-bottom-nav">
     <div class="status-bar">
       <div class="time">{{ currentTime }}</div>
       <div class="status-icons">
@@ -63,6 +63,7 @@
     </div>
 
     <div class="safe-area-bottom"></div>
+    <BottomNav />
   </div>
 </template>
 
@@ -71,11 +72,10 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Coin, Trophy, ArrowLeft } from '@element-plus/icons-vue'
-import { useUserStore } from '@/store/user'
+import BottomNav from '@/components/BottomNav.vue'
 import request from '@/api/request'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const currentTime = ref('')
 const stats = ref({
@@ -331,8 +331,12 @@ onUnmounted(() => {
 }
 
 .safe-area-bottom {
-  height: 34px;
-  background: rgba(0, 0, 0, 0.05);
+  height: 88px;
+  background: transparent;
+}
+
+.with-bottom-nav {
+  padding-bottom: 88px;
 }
 
 @media (max-width: 375px) {

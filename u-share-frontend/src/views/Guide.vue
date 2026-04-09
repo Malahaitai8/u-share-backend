@@ -1,5 +1,5 @@
 <template>
-  <div class="guide-container">
+  <div class="guide-container with-bottom-nav">
     <!-- 状态栏 -->
     <div class="status-bar">
       <div class="time">{{ currentTime }}</div>
@@ -123,6 +123,8 @@
       <el-icon class="loading-icon is-loading"><Loading /></el-icon>
       <span class="loading-text">加载中...</span>
     </div>
+
+    <BottomNav />
   </div>
 </template>
 
@@ -131,6 +133,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Location, LocationFilled, Guide, Loading, ArrowUp, Aim } from '@element-plus/icons-vue'
+import BottomNav from '@/components/BottomNav.vue'
 import { getDustbins, getNearestDustbin } from '@/api/guide'
 
 const router = useRouter()
@@ -1742,6 +1745,10 @@ onUnmounted(() => {
   background: #f5f5f5;
   position: relative;
   overflow: hidden;
+}
+
+.with-bottom-nav {
+  padding-bottom: 72px;
 }
 
 // 状态栏样式

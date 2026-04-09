@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-dashboard-container">
+  <div class="mobile-dashboard-container with-bottom-nav">
     <!-- 状态栏 -->
     <div class="status-bar">
       <div class="time">9:41</div>
@@ -67,7 +67,7 @@
             <span class="feature-label">垃圾分类识别</span>
           </div>
           
-          <div class="feature-item" @click="showComingSoon('积分商城')">
+          <div class="feature-item" @click="goToIncentive">
             <div class="feature-icon">
               <el-icon><Trophy /></el-icon>
             </div>
@@ -122,6 +122,8 @@
 
     <!-- 底部安全区域 -->
     <div class="safe-area-bottom"></div>
+
+    <BottomNav />
   </div>
 </template>
 
@@ -131,17 +133,18 @@ import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
 import { getUserStats } from '@/api/classification'
-import { 
-  User, 
-  SwitchButton, 
-  Camera, 
-  Trophy, 
-  DataAnalysis, 
-  Reading, 
-  UserFilled, 
+import {
+  User,
+  SwitchButton,
+  Camera,
+  Trophy,
+  DataAnalysis,
+  Reading,
+  UserFilled,
   Setting,
   Guide
 } from '@element-plus/icons-vue'
+import BottomNav from '@/components/BottomNav.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -193,6 +196,10 @@ const goToGuide = () => {
 
 const goToStats = () => {
   router.push('/stats')
+}
+
+const goToIncentive = () => {
+  router.push('/incentive')
 }
 
 const showComingSoon = (featureName) => {
@@ -316,40 +323,40 @@ const showComingSoon = (featureName) => {
 
 // 欢迎区域
 .welcome-section {
-  margin-bottom: 32px;
-  
+  margin-bottom: 18px;
+
   .welcome-card {
     background: rgba(255, 255, 255, 0.95);
-    border-radius: 20px;
-    padding: 12px;
+    border-radius: 18px;
+    padding: 8px;
     text-align: center;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
     align-items: center;
-    
+
     .welcome-image {
       width: 100%;
-      max-width: 280px;
-      height: auto;
-      border-radius: 12px;
+      max-width: 250px;
+      height: 130px;
+      border-radius: 10px;
       object-fit: cover;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
-    
+
     .welcome-text {
       width: 100%;
-      
+
       .welcome-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 600;
         color: #333;
-        margin: 0 0 4px 0;
+        margin: 0 0 2px 0;
         line-height: 1.2;
       }
-      
+
       .welcome-subtitle {
-        font-size: 13px;
+        font-size: 12px;
         color: #666;
         margin: 0;
         line-height: 1.2;
@@ -418,35 +425,35 @@ const showComingSoon = (featureName) => {
     font-size: 16px;
     font-weight: 600;
     color: white;
-    margin: 0 0 16px 0;
+    margin: 0 0 10px 0;
     padding-left: 4px;
   }
-  
+
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    
+    gap: 10px;
+
     &.two-col {
       grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .stat-item {
       background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
-      padding: 20px 12px;
+      border-radius: 14px;
+      padding: 12px 10px;
       text-align: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+
       .stat-number {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
         color: #4CAF50;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
       }
-      
+
       .stat-label {
-        font-size: 12px;
+        font-size: 11px;
         color: #666;
         font-weight: 500;
       }
@@ -456,8 +463,12 @@ const showComingSoon = (featureName) => {
 
 // 底部安全区域
 .safe-area-bottom {
-  height: 34px;
-  background: rgba(0, 0, 0, 0.05);
+  height: 88px;
+  background: transparent;
+}
+
+.with-bottom-nav {
+  padding-bottom: 88px;
 }
 
 // 响应式设计
