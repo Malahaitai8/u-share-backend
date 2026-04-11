@@ -2,8 +2,8 @@
   <div class="exchange-admin-page">
     <aside class="sidebar">
       <div class="brand-block">
-        <h2>兑换工作台</h2>
-        <p>后勤线下兑换登记系统</p>
+        <h2>数据工作台</h2>
+        <p>后勤线下兑换登记与数据统计系统</p>
       </div>
 
       <div class="menu-list">
@@ -338,9 +338,17 @@ onUnmounted(() => {
   }
 }
 
-undefined
+.main-content {
+  flex: 1;
+  min-width: 0;
+  width: calc(100vw - 230px);
+  padding: 24px 6px 24px 24px;
+}
+
 .placeholder-panel,
 .register-panel {
+  width: 100%;
+  min-height: calc(100vh - 48px);
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(165, 196, 235, 0.45);
   border-radius: 18px;
@@ -424,6 +432,11 @@ undefined
     .menu-item {
       justify-content: center;
     }
+  }
+
+  .main-content {
+    width: 100%;
+    padding: 16px;
   }
 }
 </style>
