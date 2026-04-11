@@ -108,7 +108,7 @@
         </div>
       </section>
 
-      <section v-if="activeTab === 'records'" class="section-card">
+      <section v-if="activeTab === 'records'" class="section-card records-section">
         <div class="points-overview compact">
           <div class="points-main two-col">
             <div class="points-item current">
@@ -122,7 +122,7 @@
           </div>
         </div>
 
-        <div class="record-card only-page">
+        <div class="record-card only-page stretched">
           <div class="record-head">
             <h3>兑换记录</h3>
             <span>{{ exchangeRecords.length }} 条</span>
@@ -133,6 +133,15 @@
               <div class="left">
                 <div class="title">{{ rec.title }}</div>
                 <div class="meta">{{ rec.time }} · {{ rec.category }}</div>
+                <div class="status-line">
+                  <el-tag
+                    size="small"
+                    :type="rec.offline_status === 'completed' ? 'success' : 'warning'"
+                    effect="light"
+                  >
+                    {{ rec.offline_status === 'completed' ? '已线下兑换' : '未线下兑换' }}
+                  </el-tag>
+                </div>
               </div>
               <div class="right">-{{ rec.points_cost }} 积分</div>
             </div>
@@ -164,6 +173,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import BottomNav from '@/components/BottomNav.vue'
+import { useUserStore } from '@/store/user'
 import { convertToVolunteerHours, getLeaderboard, getMallItems, getVolunteerOverview } from '@/api/incentive'
 
 const EXCHANGE_RECORDS_KEY = 'incentive_exchange_records'
@@ -174,7 +184,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '主题文件袋',
     subtitle: '收纳讲义资料，学习整理好帮手',
-    points_cost: 100,
+    points_cost: 150,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'zhuti-wenjiandai',
@@ -185,7 +195,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '校园卡套',
     subtitle: '简洁实用，保护校园卡防磨损',
-    points_cost: 150,
+    points_cost: 200,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'xiaoyuan-katao',
@@ -196,7 +206,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '木质冰箱贴',
     subtitle: '环保木质工艺，校园主题纪念款',
-    points_cost: 200,
+    points_cost: 250,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'muzhi-bingxiangtie',
@@ -207,7 +217,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '主题帆布袋',
     subtitle: '轻便耐用，日常通勤和上课都适用',
-    points_cost: 250,
+    points_cost: 300,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'zhuti-fanbudai',
@@ -218,7 +228,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '精致鼠标垫',
     subtitle: '细腻布面材质，办公学习更舒适',
-    points_cost: 250,
+    points_cost: 350,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'jingzhi-shubiaodian',
@@ -229,7 +239,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '精致笔记本',
     subtitle: '高颜值封面，书写顺滑手感好',
-    points_cost: 300,
+    points_cost: 400,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'jingzhi-bijiben',
@@ -240,7 +250,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '滑动冰箱贴',
     subtitle: '趣味滑动设计，互动感十足',
-    points_cost: 350,
+    points_cost: 405,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'huadong-bingxiangtie',
@@ -251,7 +261,7 @@ const CULTURAL_ITEMS = [
     category: '文创',
     title: '流体冰箱贴',
     subtitle: '流体视觉效果，创意装饰感更强',
-    points_cost: 400,
+    points_cost: 500,
     stock_total: 100,
     stock_remaining: 100,
     image_name: 'liuti-bingxiangtie',
@@ -260,6 +270,7 @@ const CULTURAL_ITEMS = [
 ]
 
 const router = useRouter()
+const userStore = useUserStore()
 const currentTime = ref('')
 const activeTab = ref('mall')
 const selectedCategory = ref('校内餐饮')
@@ -340,7 +351,13 @@ const formatRecordTime = (date = new Date()) => {
 const loadExchangeRecords = () => {
   try {
     const raw = localStorage.getItem(EXCHANGE_RECORDS_KEY)
-    exchangeRecords.value = raw ? JSON.parse(raw) : []
+    const parsed = raw ? JSON.parse(raw) : []
+    exchangeRecords.value = Array.isArray(parsed)
+      ? parsed.map(record => ({
+          ...record,
+          offline_status: record.offline_status === 'completed' ? 'completed' : 'pending'
+        }))
+      : []
   } catch (_) {
     exchangeRecords.value = []
   }
@@ -351,16 +368,31 @@ const persistExchangeRecords = () => {
 }
 
 const appendExchangeRecord = (item) => {
+  const username = String(userStore.userInfo?.username || '').trim()
+  const userId = userStore.userInfo?.id ?? userStore.userInfo?.user_id ?? ''
+
+  if (!username) {
+    ElMessage.error('未获取到当前用户名，无法完成兑换，请重新登录后重试')
+    return false
+  }
+
   exchangeRecords.value.unshift({
     id: `${item.id}-${Date.now()}`,
     item_id: item.id,
+    user_id: userId,
     title: item.title,
     category: item.category,
     points_cost: item.points_cost,
-    time: formatRecordTime()
+    time: formatRecordTime(),
+    username,
+    offline_status: 'pending',
+    verification_note: '',
+    verifier_name: '',
+    verified_at: ''
   })
   exchangeRecords.value = exchangeRecords.value.slice(0, 30)
   persistExchangeRecords()
+  return true
 }
 
 const stockPercent = (item) => {
@@ -368,9 +400,38 @@ const stockPercent = (item) => {
   return Math.max(0, Math.min(100, Math.round((item.stock_remaining / item.stock_total) * 100)))
 }
 
+const VOUCHER_POINTS_BY_FACE_VALUE = [100, 190, 280, 350, 420]
+
 const isVoucherItem = (item) => {
   if (!item) return false
   return item.category === '校内餐饮' || /daijinquan/i.test(item.image_name || '')
+}
+
+const applyVoucherPointsRule = (items = []) => {
+  const voucherItems = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isVoucherItem(item))
+    .map(({ item, index }) => {
+      const title = item?.title || ''
+      const match = title.match(/(\d+)\s*元代金券/)
+      const faceValue = match ? Number(match[1]) : Number.POSITIVE_INFINITY
+      return { item, index, faceValue }
+    })
+    .sort((a, b) => a.faceValue - b.faceValue)
+
+  const pointMap = new Map()
+  voucherItems.forEach(({ item }, idx) => {
+    const fallbackPoints = VOUCHER_POINTS_BY_FACE_VALUE[VOUCHER_POINTS_BY_FACE_VALUE.length - 1]
+    pointMap.set(item.id, VOUCHER_POINTS_BY_FACE_VALUE[idx] ?? fallbackPoints)
+  })
+
+  return items.map(item => {
+    if (!pointMap.has(item.id)) return item
+    return {
+      ...item,
+      points_cost: pointMap.get(item.id)
+    }
+  })
 }
 
 const updateTime = () => {
@@ -386,7 +447,7 @@ const fetchMall = async () => {
     const data = await getMallItems()
 
     const nextItems = Array.isArray(data?.items) ? data.items : []
-    const normalizedItems = nextItems.map(item => {
+    const normalizedItems = applyVoucherPointsRule(nextItems).map(item => {
       if (item?.category === '其他' && /志愿时长/.test(item?.title || '')) {
         const hasLocalImage = item?.image_name && localShopImageMap[item.image_name]
         return {
@@ -445,6 +506,13 @@ const switchBoard = async (type) => {
 
 const submitExchange = async (item) => {
   if (overview.value.current_points < item.points_cost) return
+
+  const username = String(userStore.userInfo?.username || '').trim()
+  if (!username) {
+    ElMessage.error('当前账号缺少用户名信息，无法发起兑换，请联系管理员完善账号')
+    return
+  }
+
   try {
     if (item.id === 'volunteer-half-hour') {
       await convertToVolunteerHours(item.points_cost)
@@ -453,7 +521,10 @@ const submitExchange = async (item) => {
       overview.value.current_points = Math.max(0, overview.value.current_points - item.points_cost)
       overview.value.consumed_points += item.points_cost
     }
-    appendExchangeRecord(item)
+
+    const recordAppended = appendExchangeRecord(item)
+    if (!recordAppended) return
+
     showSuccess.value = true
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '兑换失败')
@@ -573,6 +644,12 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
+.records-section {
+  min-height: calc(100vh - 250px);
+  display: flex;
+  flex-direction: column;
+}
+
 .points-overview {
   margin-bottom: 12px;
   padding: 10px;
@@ -584,6 +661,12 @@ onUnmounted(() => {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+
+    &.two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      max-width: 260px;
+      margin: 0 auto;
+    }
   }
 
   .points-item {
@@ -649,6 +732,13 @@ onUnmounted(() => {
   background: #fbfffd;
   padding: 10px;
 
+  &.stretched {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
   .record-head {
     display: flex;
     align-items: center;
@@ -677,8 +767,10 @@ onUnmounted(() => {
   .record-list {
     display: grid;
     gap: 8px;
-    max-height: 180px;
+    flex: 1;
+    min-height: 260px;
     overflow-y: auto;
+    align-content: start;
   }
 
   .record-row {

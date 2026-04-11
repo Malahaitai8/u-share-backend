@@ -28,6 +28,14 @@ html, body {
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
+body.desktop-admin-mode #app {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 // 滚动条样式
 ::-webkit-scrollbar {
   width: 8px;

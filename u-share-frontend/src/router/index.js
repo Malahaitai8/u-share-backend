@@ -95,6 +95,15 @@ const routes = [
       title: '核心激励模块',
       requiresAuth: true
     }
+  },
+  {
+    path: '/incentive-admin',
+    name: 'IncentiveExchangeAdmin',
+    component: () => import('@/views/IncentiveExchangeAdmin.vue'),
+    meta: {
+      title: '兑换登记后台',
+      requiresAuth: true
+    }
   }
 ]
 
