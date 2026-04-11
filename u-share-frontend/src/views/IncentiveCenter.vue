@@ -910,6 +910,6 @@ onUnmounted(() => {
 }
 
 :deep(.bottom-nav) {
-  transform: translateX(-4px);
+  transform: translateX(0);
 }
 </style>
