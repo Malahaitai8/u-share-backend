@@ -120,9 +120,6 @@
       </div>
     </div>
 
-    <!-- 底部安全区域 -->
-    <div class="safe-area-bottom"></div>
-
     <BottomNav />
   </div>
 </template>
@@ -214,8 +211,7 @@ const showComingSoon = (featureName) => {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 // 状态栏样式
@@ -229,6 +225,9 @@ const showComingSoon = (featureName) => {
   color: white;
   font-size: 14px;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1100;
   
   .time {
     font-size: 16px;
@@ -246,6 +245,9 @@ const showComingSoon = (featureName) => {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   padding: 16px 20px;
+  position: sticky;
+  top: 44px;
+  z-index: 1100;
   
   .nav-content {
     display: flex;
@@ -319,6 +321,9 @@ const showComingSoon = (featureName) => {
   max-width: 414px;
   margin: 0 auto;
   width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(20px + 88px);
 }
 
 // 欢迎区域

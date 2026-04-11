@@ -62,7 +62,6 @@
       </div>
     </div>
 
-    <div class="safe-area-bottom"></div>
     <BottomNav />
   </div>
 </template>
@@ -133,8 +132,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .status-bar {
@@ -147,6 +145,9 @@ onUnmounted(() => {
   color: white;
   font-size: 14px;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1100;
   
   .time {
     font-size: 16px;
@@ -163,6 +164,9 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   padding: 16px 20px;
+  position: sticky;
+  top: 44px;
+  z-index: 1100;
   
   .nav-content {
     display: flex;
@@ -202,6 +206,9 @@ onUnmounted(() => {
   max-width: 414px;
   margin: 0 auto;
   width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(20px + 88px);
 }
 
 .stats-card {

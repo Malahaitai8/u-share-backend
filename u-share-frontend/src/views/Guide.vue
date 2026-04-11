@@ -1891,7 +1891,8 @@ onUnmounted(() => {
 // 最近垃圾桶信息卡片（可展开/收起）
 .nearest-info-card {
   position: absolute;
-  bottom: 20px;
+  // 底部有导航栏时，整体上移，避免“开始导航”按钮被遮挡
+  bottom: 96px;
   left: 20px;
   right: 20px;
   background: rgba(255, 255, 255, 0.95);

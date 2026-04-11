@@ -1,18 +1,20 @@
 <template>
   <div class="incentive-page with-bottom-nav">
-    <div class="status-bar">
-      <div class="time">{{ currentTime }}</div>
-      <div class="status-icons">
-        <span>📶</span><span>📶</span><span>🔋</span>
+    <div class="top-header">
+      <div class="status-bar">
+        <div class="time">{{ currentTime }}</div>
+        <div class="status-icons">
+          <span>📶</span><span>📶</span><span>🔋</span>
+        </div>
       </div>
-    </div>
 
-    <div class="nav-bar">
-      <el-button class="back-button" circle size="small" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon>
-      </el-button>
-      <h2>积分商城</h2>
-      <div class="placeholder" />
+      <div class="nav-bar">
+        <el-button class="back-button" circle size="small" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </el-button>
+        <h2>积分商城</h2>
+        <div class="placeholder" />
+      </div>
     </div>
 
     <div class="content-wrap">
@@ -53,9 +55,12 @@
 
         <div v-else class="mall-grid">
           <div v-for="item in filteredItems" :key="item.id" class="mall-card">
-            <div class="item-img-wrap">
-              <img :src="item.image_url || fallbackImage(item.image_name)" class="item-img" />
-              <span class="img-name-tag">{{ item.image_name }}</span>
+            <div :class="['item-img-wrap', { 'is-voucher': isVoucherItem(item) }]">
+              <img
+                :src="resolveItemImage(item)"
+                :class="['item-img', { 'item-img--contain': isVoucherItem(item) }]"
+                @error="handleImageError($event, item)"
+              />
             </div>
             <div class="item-title">{{ item.title }}</div>
             <div class="item-sub">{{ item.subtitle }}</div>
@@ -163,6 +168,97 @@ import { convertToVolunteerHours, getLeaderboard, getMallItems, getVolunteerOver
 
 const EXCHANGE_RECORDS_KEY = 'incentive_exchange_records'
 
+const CULTURAL_ITEMS = [
+  {
+    id: 'cultural-theme-file-bag',
+    category: '文创',
+    title: '主题文件袋',
+    subtitle: '收纳讲义资料，学习整理好帮手',
+    points_cost: 100,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'zhuti-wenjiandai',
+    image_url: ''
+  },
+  {
+    id: 'cultural-campus-card-holder',
+    category: '文创',
+    title: '校园卡套',
+    subtitle: '简洁实用，保护校园卡防磨损',
+    points_cost: 150,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'xiaoyuan-katao',
+    image_url: ''
+  },
+  {
+    id: 'cultural-wood-fridge-magnet',
+    category: '文创',
+    title: '木质冰箱贴',
+    subtitle: '环保木质工艺，校园主题纪念款',
+    points_cost: 200,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'muzhi-bingxiangtie',
+    image_url: ''
+  },
+  {
+    id: 'cultural-theme-canvas-bag',
+    category: '文创',
+    title: '主题帆布袋',
+    subtitle: '轻便耐用，日常通勤和上课都适用',
+    points_cost: 250,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'zhuti-fanbudai',
+    image_url: ''
+  },
+  {
+    id: 'cultural-fine-mouse-pad',
+    category: '文创',
+    title: '精致鼠标垫',
+    subtitle: '细腻布面材质，办公学习更舒适',
+    points_cost: 250,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'jingzhi-shubiaodian',
+    image_url: ''
+  },
+  {
+    id: 'cultural-fine-notebook',
+    category: '文创',
+    title: '精致笔记本',
+    subtitle: '高颜值封面，书写顺滑手感好',
+    points_cost: 300,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'jingzhi-bijiben',
+    image_url: ''
+  },
+  {
+    id: 'cultural-slide-fridge-magnet',
+    category: '文创',
+    title: '滑动冰箱贴',
+    subtitle: '趣味滑动设计，互动感十足',
+    points_cost: 350,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'huadong-bingxiangtie',
+    image_url: ''
+  },
+  {
+    id: 'cultural-fluid-fridge-magnet',
+    category: '文创',
+    title: '流体冰箱贴',
+    subtitle: '流体视觉效果，创意装饰感更强',
+    points_cost: 400,
+    stock_total: 100,
+    stock_remaining: 100,
+    image_name: 'liuti-bingxiangtie',
+    image_url: ''
+  }
+]
+
 const router = useRouter()
 const currentTime = ref('')
 const activeTab = ref('mall')
@@ -190,9 +286,45 @@ let timeTimer = null
 const filteredItems = computed(() => mall.value.items.filter(i => i.category === selectedCategory.value))
 const displayConsumedPoints = computed(() => Number(overview.value.consumed_points || 0))
 
+const localShopImageModules = import.meta.glob('../assets/shop/**/*.{png,jpg,jpeg,webp}', {
+  eager: true,
+  import: 'default'
+})
+
+const localShopImageMap = Object.entries(localShopImageModules).reduce((acc, [path, url]) => {
+  const fileName = path.split('/').pop() || ''
+  const key = fileName.replace(/\.(png|jpe?g|webp)$/i, '')
+  if (key) acc[key] = url
+  return acc
+}, {})
+
 const fallbackImage = (imageName) => {
   if (!imageName) return 'https://via.placeholder.com/800x500?text=mall-image'
+
+  const localImage = localShopImageMap[imageName]
+  if (localImage) return localImage
+
   return `https://via.placeholder.com/800x500?text=${encodeURIComponent(imageName)}`
+}
+
+const resolveItemImage = (item) => {
+  const imageName = item?.image_name
+  const localImage = imageName ? localShopImageMap[imageName] : ''
+
+  if (localImage) return localImage
+  if (item?.image_url) return item.image_url
+
+  return fallbackImage(imageName)
+}
+
+const handleImageError = (event, item) => {
+  const imageName = item?.image_name
+  const localImage = imageName ? localShopImageMap[imageName] : ''
+  const fallback = localImage || fallbackImage(imageName)
+
+  if (event?.target && event.target.src !== fallback) {
+    event.target.src = fallback
+  }
 }
 
 const formatRecordTime = (date = new Date()) => {
@@ -236,6 +368,11 @@ const stockPercent = (item) => {
   return Math.max(0, Math.min(100, Math.round((item.stock_remaining / item.stock_total) * 100)))
 }
 
+const isVoucherItem = (item) => {
+  if (!item) return false
+  return item.category === '校内餐饮' || /daijinquan/i.test(item.image_name || '')
+}
+
 const updateTime = () => {
   const d = new Date()
   currentTime.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -247,9 +384,33 @@ const fetchMall = async () => {
   mallLoading.value = true
   try {
     const data = await getMallItems()
-    mall.value = data
-    if (data.categories?.length) {
-      selectedCategory.value = data.categories[0]
+
+    const nextItems = Array.isArray(data?.items) ? data.items : []
+    const normalizedItems = nextItems.map(item => {
+      if (item?.category === '其他' && /志愿时长/.test(item?.title || '')) {
+        const hasLocalImage = item?.image_name && localShopImageMap[item.image_name]
+        return {
+          ...item,
+          image_name: hasLocalImage ? item.image_name : 'zhiyuanshichang'
+        }
+      }
+      return item
+    })
+    const nonCulturalItems = normalizedItems.filter(item => item.category !== '文创')
+
+    mall.value = {
+      ...data,
+      items: [...nonCulturalItems, ...CULTURAL_ITEMS]
+    }
+
+    if (Array.isArray(data?.categories)) {
+      mall.value.categories = data.categories.includes('文创')
+        ? data.categories
+        : [...data.categories, '文创']
+    }
+
+    if (mall.value.categories?.length) {
+      selectedCategory.value = mall.value.categories[0]
     }
   } catch (e) {
     ElMessage.error('商城数据加载失败')
@@ -313,11 +474,24 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .incentive-page {
+  height: 100vh;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background:
     radial-gradient(circle at 8% 4%, rgba(255, 255, 255, 0.34) 0, rgba(255, 255, 255, 0) 36%),
     radial-gradient(circle at 92% 8%, rgba(196, 255, 230, 0.3) 0, rgba(196, 255, 230, 0) 42%),
     linear-gradient(165deg, #1f9d65 0%, #3fa77b 48%, #2f7c8b 100%);
+}
+
+.top-header {
+  position: sticky;
+  top: 0;
+  z-index: 1200;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
 }
 
 .status-bar,
@@ -329,7 +503,13 @@ onUnmounted(() => {
   padding: 14px 16px;
 }
 
+.status-bar {
+  padding-bottom: 6px;
+}
+
 .nav-bar {
+  padding-top: 6px;
+
   h2 {
     font-size: 19px;
     margin: 0;
@@ -349,10 +529,12 @@ onUnmounted(() => {
 .placeholder { width: 32px; }
 
 .content-wrap {
-  padding: 14px;
-  max-width: 460px;
-  margin: 0 auto;
-  padding-bottom: 92px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  padding: 16px 12px 92px;
 }
 
 .with-bottom-nav { padding-bottom: 92px; }
@@ -381,6 +563,7 @@ onUnmounted(() => {
 }
 
 .section-card {
+  width: 100%;
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 255, 251, 0.96) 100%);
   padding: 14px;
@@ -554,20 +737,22 @@ onUnmounted(() => {
     border-radius: 12px;
     border: 1px dashed #a8d8c0;
     background: linear-gradient(135deg, #e6f7ef 0%, #f4fffa 100%);
+
+    &.item-img--contain {
+      object-fit: contain;
+      object-position: center;
+      background: #fff;
+      padding: 6px;
+    }
   }
 
-  .img-name-tag {
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-    padding: 3px 7px;
-    border-radius: 999px;
-    font-size: 11px;
-    color: #185b43;
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(165, 211, 189, 0.9);
-    font-weight: 600;
+  .item-img-wrap.is-voucher {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px dashed #a8d8c0;
+    overflow: hidden;
   }
+
 
   .item-title {
     margin-top: 8px;
@@ -722,5 +907,9 @@ onUnmounted(() => {
 
 @keyframes check-pop {
   to { transform: rotate(-45deg) scale(1); }
+}
+
+:deep(.bottom-nav) {
+  transform: translateX(-4px);
 }
 </style>

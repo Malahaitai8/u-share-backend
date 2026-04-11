@@ -84,9 +84,6 @@
       </div>
     </div>
 
-    <!-- 底部安全区域 -->
-    <div class="safe-area-bottom"></div>
-
     <BottomNav />
   </div>
 </template>
@@ -120,8 +117,7 @@ const goToImageRecognition = () => {
   background: linear-gradient(180deg, #4CAF50 0%, #81C784 100%);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 // 导航栏样式
@@ -132,6 +128,9 @@ const goToImageRecognition = () => {
   padding: 16px 20px;
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 1100;
   
   .back-button {
     background: rgba(255, 255, 255, 0.2);
@@ -164,6 +163,9 @@ const goToImageRecognition = () => {
   max-width: 414px;
   margin: 0 auto;
   width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(20px + 88px);
 }
 
 // 标题卡片

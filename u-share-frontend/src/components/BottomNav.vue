@@ -76,12 +76,12 @@ const isActive = (item) => {
 <style scoped lang="scss">
 .bottom-nav {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   bottom: 0;
+  margin: 0 auto;
   z-index: 1200;
-  width: 100%;
-  max-width: 414px;
+  width: min(100vw, 414px);
   height: 72px;
   background: #ffffff;
   border-top: 1px solid #e9ecef;
