@@ -18,9 +18,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   House,
   Camera,
-  Reading,
   Trophy,
-  UserFilled,
   DataAnalysis,
   Guide
 } from '@element-plus/icons-vue'
@@ -29,17 +27,12 @@ const router = useRouter()
 const route = useRoute()
 
 const navItems = [
-  { key: 'home', label: '主页', path: '/dashboard' },
+  { key: 'home', label: '主页', path: '/dashboard', icon: House },
   { key: 'classification', label: '识别', path: '/classification', icon: Camera },
-  { key: 'knowledge', label: '知识', path: '/dashboard?tab=knowledge', icon: Reading },
-  { key: 'mall', label: '商城', path: '/incentive', icon: Trophy },
-  { key: 'community', label: '活动', path: '/dashboard?tab=community', icon: UserFilled },
+  { key: 'guide', label: '投放', path: '/guide', icon: Guide },
   { key: 'stats', label: '统计', path: '/stats', icon: DataAnalysis },
-  { key: 'guide', label: '投放', path: '/guide', icon: Guide }
+  { key: 'mall', label: '商城', path: '/incentive', icon: Trophy }
 ]
-
-// 补齐主页图标（保持上方数组结构紧凑）
-navItems[0].icon = House
 
 const go = (path) => {
   if (route.fullPath !== path) {
@@ -63,12 +56,6 @@ const isActive = (item) => {
   if (item.key === 'guide') {
     return route.path === '/guide'
   }
-  if (item.key === 'knowledge') {
-    return route.path === '/dashboard' && route.query.tab === 'knowledge'
-  }
-  if (item.key === 'community') {
-    return route.path === '/dashboard' && route.query.tab === 'community'
-  }
   return false
 }
 </script>
@@ -86,7 +73,7 @@ const isActive = (item) => {
   background: #ffffff;
   border-top: 1px solid #e9ecef;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
   box-sizing: border-box;
 }

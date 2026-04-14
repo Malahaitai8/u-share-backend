@@ -60,6 +60,41 @@ export const getNearestDustbin = async (lng, lat) => {
 }
 
 /**
+ * 根据用户坐标和指定垃圾站坐标获取该站点的导航信息
+ * @param {number} lng - 用户经度
+ * @param {number} lat - 用户纬度
+ * @param {number} dustbinLng - 垃圾站经度
+ * @param {number} dustbinLat - 垃圾站纬度
+ * @returns {Promise} 指定垃圾站导航信息
+ */
+export const getDustbinRoute = async (lng, lat, dustbinLng, dustbinLat) => {
+  try {
+    const coords = [lng, lat, dustbinLng, dustbinLat]
+    if (coords.some(value => typeof value !== 'number' || Number.isNaN(value))) {
+      throw new Error('经纬度必须为有效数字')
+    }
+
+    const response = await axios.get('/guide/route', {
+      params: {
+        lng,
+        lat,
+        dustbin_lng: dustbinLng,
+        dustbin_lat: dustbinLat
+      },
+      timeout: 15000,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    return { data: response.data }
+  } catch (error) {
+    console.error('获取指定垃圾站导航信息失败:', error)
+    throw handleApiError(error, '获取指定垃圾站导航信息')
+  }
+}
+
+/**
  * 处理API错误
  * @param {Error} error - 错误对象
  * @param {string} operation - 操作名称

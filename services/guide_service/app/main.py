@@ -7,6 +7,122 @@ import asyncio
 import logging
 logger = logging.getLogger("uvicorn.error")
 
+
+def _build_nav_links_for_dustbin(db: dict) -> tuple[str, str]:
+    nav_url = f"https://uri.amap.com/navigation?to={db['lng']},{db['lat']},{db['name']}&mode=walk&src=u-share"
+    deeplink = (
+        f"amapuri://route/plan/?dlat={db['lat']}&dlon={db['lng']}"
+        f"&dname={db['name']}&t=1&sourceApplication=u-share"
+    )
+    return nav_url, deeplink
+
+
+def _build_route_result_for_dustbin(db: dict, distance: float, duration: int | None, nearby: bool) -> dict:
+    distance = round(distance, 1)
+    if nearby:
+        return {
+            "nearby": True,
+            "message": f"您距离垃圾站“{db['name']}”不到10米，请就近投放。",
+            "distance": distance,
+            "duration": None,
+            "dustbin": db,
+            "nav_url": None,
+            "deeplink": None,
+        }
+
+    nav_url, deeplink = _build_nav_links_for_dustbin(db)
+    if duration is None:
+        return {
+            "nearby": False,
+            "message": f"前往“{db['name']}”约{distance}米，暂时无法获取步行路线。",
+            "distance": distance,
+            "duration": None,
+            "dustbin": db,
+            "nav_url": nav_url,
+            "deeplink": deeplink,
+        }
+
+    duration_text = _format_duration(int(duration))
+    return {
+        "nearby": False,
+        "message": f"步行至“{db['name']}”约{distance}米，需时{duration_text}",
+        "distance": distance,
+        "duration": int(duration),
+        "dustbin": db,
+        "nav_url": nav_url,
+        "deeplink": deeplink,
+    }
+
+
+def _find_dustbin_by_coordinates(dustbin_lng: float, dustbin_lat: float) -> dict | None:
+    for db in _DUSTBINS:
+        if abs(db["lng"] - dustbin_lng) < 0.0001 and abs(db["lat"] - dustbin_lat) < 0.0001:
+            return db
+    return None
+
+
+async def _fetch_single_walking_route(origin_lng: float, origin_lat: float, db: dict) -> tuple[float | None, int | None]:
+    if not AMAP_KEY or not AMAP_KEY.strip():
+        return None, None
+
+    url = (
+        "https://restapi.amap.com/v3/direction/walking"
+        f"?origin={origin_lng},{origin_lat}&destination={db['lng']},{db['lat']}&key={AMAP_KEY}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+
+        logger.info(f"AMAP_ROUTE_REQ to={db['name']} status={response.status_code}")
+        if response.status_code != 200:
+            logger.error(f"AMAP_ROUTE_HTTP_ERROR status={response.status_code} body={response.text[:200]}")
+            return None, None
+
+        payload = response.json()
+        if payload.get("status") != "1":
+            logger.error(
+                f"AMAP_ROUTE_API_ERROR to={db['name']} info={payload.get('info')} infocode={payload.get('infocode')}"
+            )
+            return None, None
+
+        path = payload["route"]["paths"][0]
+        return float(path["distance"]), int(float(path["duration"]))
+    except httpx.TimeoutException as e:
+        logger.error(f"AMAP_ROUTE_TIMEOUT to={db['name']} error={e}")
+    except (KeyError, IndexError, ValueError) as e:
+        logger.error(f"AMAP_ROUTE_PARSE_ERROR to={db['name']} error={e}")
+    except Exception as e:
+        logger.error(f"AMAP_ROUTE_REQUEST_ERROR to={db['name']} error={type(e).__name__}: {e}")
+
+    return None, None
+
+
+# route endpoint is registered after RouteResp is defined
+async def route_to_dustbin(
+    lng: float = Query(...),
+    lat: float = Query(...),
+    dustbin_lng: float = Query(...),
+    dustbin_lat: float = Query(...),
+):
+    target_db = _find_dustbin_by_coordinates(dustbin_lng, dustbin_lat)
+    if target_db is None:
+        raise HTTPException(status_code=404, detail="未找到指定的垃圾站点")
+
+    direct_distance = _haversine(lng, lat, target_db["lng"], target_db["lat"])
+    logger.info(
+        f"ROUTE_TO_DUSTBIN origin=({lng},{lat}) target={target_db['name']} straight_dist={round(direct_distance, 1)}m"
+    )
+
+    if direct_distance < 10:
+        return _build_route_result_for_dustbin(target_db, direct_distance, None, True)
+
+    route_distance, route_duration = await _fetch_single_walking_route(lng, lat, target_db)
+    if route_distance is None:
+        logger.warning(f"ROUTE_TO_DUSTBIN_FALLBACK target={target_db['name']}")
+        return _build_route_result_for_dustbin(target_db, direct_distance, None, False)
+
+    return _build_route_result_for_dustbin(target_db, route_distance, route_duration, False)
 app = FastAPI(title="Garbage Guide Service", description="垃圾投放引导后端", version="0.1.0")
 
 # 允许所有来源跨域，生产环境可限定具体域名
@@ -211,6 +327,8 @@ class RouteResp(BaseModel):
     dustbin: Dustbin
     nav_url: str | None = Field(None, description="H5导航链接")
     deeplink: str | None = Field(None, description="高德App deeplink")
+
+app.get("/route", response_model=RouteResp)(route_to_dustbin)
 
 @app.get("/nearest", response_model=RouteResp)
 async def nearest_dustbin(lng: float = Query(...), lat: float = Query(...)):

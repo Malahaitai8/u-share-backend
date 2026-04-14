@@ -59,7 +59,7 @@
       <!-- 功能菜单 -->
       <div class="features-section">
         <h4 class="section-title">功能菜单</h4>
-        <div class="features-grid">
+        <div class="features-grid four-col">
           <div class="feature-item" @click="goToClassification">
             <div class="feature-icon">
               <el-icon><Camera /></el-icon>
@@ -79,20 +79,6 @@
               <el-icon><DataAnalysis /></el-icon>
             </div>
             <span class="feature-label">数据统计</span>
-          </div>
-          
-          <div class="feature-item" @click="showComingSoon('环保知识')">
-            <div class="feature-icon">
-              <el-icon><Reading /></el-icon>
-            </div>
-            <span class="feature-label">环保知识</span>
-          </div>
-          
-          <div class="feature-item" @click="showComingSoon('社区活动')">
-            <div class="feature-icon">
-              <el-icon><UserFilled /></el-icon>
-            </div>
-            <span class="feature-label">社区活动</span>
           </div>
           
           <div class="feature-item" @click="goToGuide">
@@ -136,8 +122,6 @@ import {
   Camera,
   Trophy,
   DataAnalysis,
-  Reading,
-  UserFilled,
   Setting,
   Guide
 } from '@element-plus/icons-vue'
@@ -384,8 +368,15 @@ const showComingSoon = (featureName) => {
   
   .features-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+    
+    &.four-col {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    &:not(.four-col) {
+      grid-template-columns: repeat(3, 1fr);
+    }
     
     .feature-item {
       background: rgba(255, 255, 255, 0.95);

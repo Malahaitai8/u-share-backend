@@ -1,6 +1,7 @@
 # app/main.py
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from datetime import timedelta
 from jose import JWTError, jwt
 
 from . import crud, models, schemas, security
+from . import crud_admin, schemas_admin
 from .database import SessionLocal, engine, MASTER_DATABASE_URL
 from sqlalchemy import create_engine as create_sqlalchemy_engine, text
 
@@ -184,3 +186,84 @@ async def get_full_leaderboard(
 ):
     _ = current_user
     return crud.get_leaderboard_data(db, board_type)
+
+
+# --- 校方管理后台 API ---
+@app.get("/admin/stats/overview", response_model=schemas_admin.OverviewResponse, tags=["Admin"], summary="获取总览数据")
+async def get_stats_overview(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_stats_overview(db)
+
+
+@app.get("/admin/stats/trend", response_model=schemas_admin.TrendResponse, tags=["Admin"], summary="获取趋势数据")
+async def get_stats_trend(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    period: str = Query("day", description="周期 day/week/month"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_stats_trend(db, start_date, end_date, period)
+
+
+@app.get("/admin/stats/by-type", response_model=schemas_admin.TypeStatsResponse, tags=["Admin"], summary="按垃圾类型统计")
+async def get_stats_by_type(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_stats_by_type(db, start_date, end_date)
+
+
+@app.get("/admin/stats/by-method", response_model=schemas_admin.MethodStatsResponse, tags=["Admin"], summary="按识别方式统计")
+async def get_stats_by_method(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_stats_by_method(db, start_date, end_date)
+
+
+@app.get("/admin/stats/by-location", response_model=schemas_admin.LocationStatsResponse, tags=["Admin"], summary="按投放点统计")
+async def get_stats_by_location(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_stats_by_location(db, start_date, end_date)
+
+
+@app.get("/admin/stats/leaderboard", response_model=schemas_admin.LeaderboardResponse, tags=["Admin"], summary="用户排行榜")
+async def get_admin_leaderboard(
+    limit: int = Query(10, description="返回数量"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    return crud_admin.get_leaderboard(db, limit)
+
+
+@app.get("/admin/stats/export", tags=["Admin"], summary="导出CSV")
+async def export_stats(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _ = current_user
+    csv_content = crud_admin.export_stats_csv(db, start_date, end_date)
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=stats_{start_date}_{end_date}.csv"}
+    )

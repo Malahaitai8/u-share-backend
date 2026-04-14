@@ -22,6 +22,9 @@ class ClassificationRecord(Base):
     recognition_method = Column(String(20), nullable=True)
     points_earned = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
+    dustbin_lng = Column(Float, nullable=True)
+    dustbin_lat = Column(Float, nullable=True)
+    dustbin_name = Column(String(100), nullable=True)
 
 
 class UserPoints(Base):

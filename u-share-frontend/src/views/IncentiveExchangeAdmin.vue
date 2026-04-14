@@ -28,9 +28,8 @@
     </aside>
 
     <main class="main-content">
-      <section v-if="activeMenu === 'stats'" class="placeholder-panel">
-        <h3>数据统计模块</h3>
-        <p>该模块待开发，可在此处接入按日/周/月的兑换与核销分析图表。</p>
+      <section v-if="activeMenu === 'stats'">
+        <AdminStats />
       </section>
 
       <section v-else class="register-panel">
@@ -155,6 +154,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, Tickets } from '@element-plus/icons-vue'
+import AdminStats from './admin/AdminStats.vue'
 
 const EXCHANGE_RECORDS_KEY = 'incentive_exchange_records'
 
@@ -267,9 +267,35 @@ const submitRegister = () => {
   ElMessage.success('兑换登记提交成功')
 }
 
+const initMockExchangeRecords = () => {
+  const mockRecords = [
+    { id: 1, username: 'testuser', title: '环保帆布袋', time: '2026-04-10 14:30', offline_status: 'completed', verifier_name: '后勤小王', verified_at: '2026-04-10 16:45' },
+    { id: 2, username: 'cy', title: '分类指南手册', time: '2026-04-11 09:15', offline_status: 'completed', verifier_name: '后勤小李', verified_at: '2026-04-11 11:20' },
+    { id: 3, username: 'testuser1', title: '可降解垃圾袋套装', time: '2026-04-12 16:45', offline_status: 'pending', verifier_name: '', verified_at: '' },
+    { id: 4, username: 'codex_1776040531', title: '环保帆布袋', time: '2026-04-12 10:00', offline_status: 'completed', verifier_name: '后勤小王', verified_at: '2026-04-12 14:30' },
+    { id: 5, username: 'pw_1776040946', title: '分类指南手册', time: '2026-04-13 08:20', offline_status: 'pending', verifier_name: '', verified_at: '' },
+    { id: 6, username: 'testuser', title: '可降解垃圾袋套装', time: '2026-04-09 15:30', offline_status: 'completed', verifier_name: '后勤小李', verified_at: '2026-04-09 17:00' },
+    { id: 7, username: 'cy', title: '环保保温杯', time: '2026-04-08 11:45', offline_status: 'completed', verifier_name: '后勤小张', verified_at: '2026-04-08 13:15' },
+    { id: 8, username: 'testuser1', title: '环保帆布袋', time: '2026-04-07 14:00', offline_status: 'pending', verifier_name: '', verified_at: '' },
+    { id: 9, username: 'codex_1776040572', title: '可降解垃圾袋套装', time: '2026-04-06 09:30', offline_status: 'completed', verifier_name: '后勤小王', verified_at: '2026-04-06 10:45' },
+    { id: 10, username: 'pw_1776040946', title: '分类指南手册', time: '2026-04-05 16:20', offline_status: 'completed', verifier_name: '后勤小李', verified_at: '2026-04-05 18:00' },
+    { id: 11, username: 'testuser', title: '环保保温杯', time: '2026-04-04 10:15', offline_status: 'pending', verifier_name: '', verified_at: '' },
+    { id: 12, username: 'cy', title: '环保帆布袋', time: '2026-04-03 14:30', offline_status: 'completed', verifier_name: '后勤小张', verified_at: '2026-04-03 15:45' },
+    { id: 13, username: 'testuser1', title: '可降解垃圾袋套装', time: '2026-04-02 11:00', offline_status: 'completed', verifier_name: '后勤小王', verified_at: '2026-04-02 12:30' },
+    { id: 14, username: 'codex_1776040531', title: '分类指南手册', time: '2026-04-01 09:00', offline_status: 'completed', verifier_name: '后勤小李', verified_at: '2026-04-01 10:15' },
+    { id: 15, username: 'pw_1776040946', title: '环保保温杯', time: '2026-03-31 15:45', offline_status: 'pending', verifier_name: '', verified_at: '' }
+  ]
+  return mockRecords
+}
+
 onMounted(() => {
   document.body.classList.add('desktop-admin-mode')
   loadRecords()
+  if (records.value.length === 0) {
+    const mockData = initMockExchangeRecords()
+    mockData.forEach(rec => records.value.push(rec))
+    persistRecords()
+  }
 })
 
 onUnmounted(() => {

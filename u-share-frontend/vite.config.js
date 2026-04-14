@@ -37,6 +37,12 @@ export default defineConfig({
         target: 'http://localhost:8085',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/guide/, '')
+      },
+      '/_AMapService': {
+        target: 'https://restapi.amap.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/_AMapService/, '')
       }
     }
   }

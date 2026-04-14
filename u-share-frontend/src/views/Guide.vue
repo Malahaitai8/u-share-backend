@@ -56,10 +56,15 @@
       <div v-if="userPosition" class="map-coordinates">
         {{ formatCoordinates(userPosition.lng, userPosition.lat) }}
       </div>
+      <div v-if="mapError" class="map-error-panel">
+        <div class="map-error-title">地图加载失败</div>
+        <div class="map-error-text">{{ mapError }}</div>
+        <img class="map-fallback-image" :src="fallbackMapUrl" alt="地图静态预览" />
+      </div>
     </div>
 
     <!-- 最近垃圾桶信息卡片（可展开/收起） -->
-    <div v-if="nearestInfo" class="nearest-info-card" :class="{ 'expanded': cardExpanded }">
+    <div v-if="displayInfo" class="nearest-info-card" :class="{ 'expanded': cardExpanded }">
       <!-- 卡片头部（可点击展开/收起） -->
       <div class="info-header" @click="toggleCard">
         <div class="header-left">
@@ -73,38 +78,38 @@
       
       <!-- 卡片内容（展开时显示） -->
       <div v-show="cardExpanded" class="info-content">
-        <div class="info-name">{{ nearestInfo.dustbin.name }}</div>
-        <div v-if="nearestInfo.dustbin.description" class="info-description">
-          {{ nearestInfo.dustbin.description }}
+        <div class="info-name">{{ displayInfo.dustbin.name }}</div>
+        <div v-if="displayInfo.dustbin.description" class="info-description">
+          {{ displayInfo.dustbin.description }}
         </div>
         
         <!-- 如果是近距离（<10米），突出显示提示信息 -->
-        <div v-if="nearestInfo.nearby" class="nearby-alert">
+        <div v-if="displayInfo.nearby" class="nearby-alert">
           <div class="nearby-icon">📍</div>
           <div class="nearby-text">
             <div class="nearby-title">已到达附近</div>
-            <div class="nearby-distance">距离不到 {{ nearestInfo.distance }}米</div>
+            <div class="nearby-distance">距离不到 {{ displayInfo.distance }}米</div>
             <div class="nearby-tip">请就近投放垃圾</div>
           </div>
         </div>
         
         <!-- 如果距离较远（≥10米），显示详细导航信息 -->
         <template v-else>
-          <div v-if="nearestInfo.distance" class="info-distance">
+          <div v-if="displayInfo.distance" class="info-distance">
             <span class="distance-label">距离：</span>
-            <span class="distance-value">{{ nearestInfo.distance }}米</span>
+            <span class="distance-value">{{ displayInfo.distance }}米</span>
           </div>
-          <div v-if="nearestInfo.duration" class="info-duration">
+          <div v-if="displayInfo.duration" class="info-duration">
             <span class="duration-label">预计时间：</span>
-            <span class="duration-value">约{{ formatDuration(nearestInfo.duration) }}</span>
+            <span class="duration-value">约{{ formatDuration(displayInfo.duration) }}</span>
           </div>
-          <div v-if="nearestInfo.message" class="info-message">
-            {{ nearestInfo.message }}
+          <div v-if="displayInfo.message" class="info-message">
+            {{ displayInfo.message }}
           </div>
         </template>
         
-        <!-- 只有距离≥10米且有导航链接时才显示导航按钮 -->
-        <div v-if="!nearestInfo.nearby && (nearestInfo.nav_url || nearestInfo.deeplink)" class="info-buttons">
+        <!-- 有导航链接时显示导航按钮 -->
+        <div v-if="nearestInfo && (nearestInfo.nav_url || nearestInfo.deeplink)" class="info-buttons">
           <el-button 
             type="primary" 
             size="small" 
@@ -113,6 +118,15 @@
           >
             <el-icon><Guide /></el-icon>
             <span>开始导航</span>
+          </el-button>
+        </div>
+        <div v-if="isManualStationSelected" class="info-buttons secondary-actions">
+          <el-button
+            size="small"
+            class="reset-nearest-button"
+            @click="resetToRecommendedStation"
+          >
+            返回最近站点
           </el-button>
         </div>
       </div>
@@ -129,17 +143,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Location, LocationFilled, Guide, Loading, ArrowUp, Aim } from '@element-plus/icons-vue'
 import BottomNav from '@/components/BottomNav.vue'
-import { getDustbins, getNearestDustbin } from '@/api/guide'
+import { getDustbins, getNearestDustbin, getDustbinRoute } from '@/api/guide'
 
 const router = useRouter()
 
 // 高德地图API Key - 支持从环境变量读取
-const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || '2c96a8ea85096b49090551970ed6199c'
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
+const AMAP_SECURITY_JS_CODE = import.meta.env.VITE_AMAP_SECURITY_JS_CODE
+const AMAP_SERVICE_HOST = '/_AMapService'
 
 // 响应式数据
 const loading = ref(false)
@@ -148,13 +164,80 @@ const markers = ref([])
 const infoWindow = ref(null)
 const currentTime = ref('9:41')
 const nearestInfo = ref(null)
+const recommendedInfo = ref(null)
+const activeDustbin = ref(null)
 const userPosition = ref(null)
 const cardExpanded = ref(true) // 卡片默认展开
 const locating = ref(false) // 定位按钮加载状态
 const selectingPosition = ref(false) // 是否在选择位置模式
 const autoLocatedPosition = ref(null) // 自动定位的位置（用于比较）
+const manualSelectedDustbin = ref(null) // 用户手动选择的站点
 
 // 初始化时间显示
+const mapError = ref('')
+
+const fallbackMapUrl = computed(() => {
+  const lng = userPosition.value?.lng || 116.351
+  const lat = userPosition.value?.lat || 39.954
+  return `https://restapi.amap.com/v3/staticmap?location=${lng},${lat}&zoom=16&size=750*500&markers=mid,0xFF0000,A:${lng},${lat}&key=${AMAP_KEY || ''}`
+})
+
+const sameDustbin = (first, second) => {
+  if (!first || !second) return false
+
+  const firstLng = parseFloat(first.lng)
+  const firstLat = parseFloat(first.lat)
+  const secondLng = parseFloat(second.lng)
+  const secondLat = parseFloat(second.lat)
+
+  return Math.abs(firstLng - secondLng) < 0.0001 &&
+    Math.abs(firstLat - secondLat) < 0.0001
+}
+
+const isManualStationSelected = computed(() => {
+  return Boolean(
+    activeDustbin.value &&
+    recommendedInfo.value?.dustbin &&
+    !sameDustbin(activeDustbin.value, recommendedInfo.value.dustbin)
+  )
+})
+
+const buildDustbinNavigation = (dustbin) => {
+  const lng = parseFloat(dustbin?.lng)
+  const lat = parseFloat(dustbin?.lat)
+
+  if (Number.isNaN(lng) || Number.isNaN(lat)) {
+    return {
+      nav_url: null,
+      deeplink: null
+    }
+  }
+
+  const name = encodeURIComponent(dustbin?.name || '垃圾站点')
+  return {
+    nav_url: `https://uri.amap.com/navigation?to=${lng},${lat},${name}&mode=walk&src=u-share`,
+    deeplink: `amapuri://route/plan/?dlat=${lat}&dlon=${lng}&dname=${name}&t=1&sourceApplication=u-share`
+  }
+}
+
+const buildPendingRouteInfo = (dustbin) => ({
+  nearby: false,
+  message: '正在获取该站点的导航信息...',
+  distance: null,
+  duration: null,
+  dustbin,
+  nav_url: null,
+  deeplink: null
+})
+
+const displayInfo = computed(() => {
+  if (isManualStationSelected.value && nearestInfo.value) {
+    return nearestInfo.value
+  }
+
+  return recommendedInfo.value || nearestInfo.value
+})
+
 const updateTime = () => {
   const now = new Date()
   const hours = String(now.getHours()).padStart(2, '0')
@@ -214,10 +297,14 @@ const loadAMapScript = () => {
     }
 
     // 验证 API Key
-    if (!AMAP_KEY || AMAP_KEY === 'your-amap-api-key') {
-      reject(new Error('高德地图 API Key 未配置，请在 .env 文件中设置 VITE_AMAP_KEY'))
+    if (!AMAP_KEY || AMAP_KEY === 'YOUR_AMAP_KEY' || AMAP_KEY === 'your-amap-api-key') {
+      reject(new Error('高德地图 API Key 未配置，请在前端 .env 文件中设置 VITE_AMAP_KEY'))
       return
     }
+
+    window._AMapSecurityConfig = AMAP_SECURITY_JS_CODE
+      ? { securityJsCode: AMAP_SECURITY_JS_CODE }
+      : { serviceHost: AMAP_SERVICE_HOST }
 
     // 创建唯一的回调函数名
     const callbackName = `initAMap_${Date.now()}`
@@ -258,7 +345,7 @@ const loadAMapScript = () => {
       if (!navigator.onLine) {
         reject(new Error('网络连接已断开，请检查网络后重试'))
       } else {
-        reject(new Error('高德地图脚本加载失败，请检查网络连接或 API Key'))
+        reject(new Error('高德地图脚本加载失败，请检查 VITE_AMAP_KEY、域名白名单或安全配置'))
       }
     }
     
@@ -292,6 +379,7 @@ const loadAMapScript = () => {
 const initMap = async () => {
   try {
     loading.value = true
+    mapError.value = ''
     
     // 加载高德地图脚本（带重试机制）
     let retryCount = 0
@@ -330,12 +418,17 @@ const initMap = async () => {
     // 使用北京交通大学的坐标作为初始显示位置
     // 北京交通大学（本部）：东经116.351，北纬39.954
     const bjtuCenter = [116.351, 39.954] // 北京交通大学坐标
+    const baseLayer = new window.AMap.TileLayer({
+      visible: true,
+      opacity: 1,
+      zIndex: 1
+    })
     
-    map.value = new AMap.Map('map-container', {
+    map.value = new window.AMap.Map('map-container', {
       zoom: 17, // 提高初始缩放级别，更聚焦校园
       center: bjtuCenter, // 默认显示交大位置
-      mapStyle: 'amap://styles/normal',
-      viewMode: '2D'
+      viewMode: '2D',
+      layers: [baseLayer]
     })
 
     // 等待地图加载完成
@@ -353,8 +446,8 @@ const initMap = async () => {
 
     // 创建信息窗口（固定大小）
     try {
-      infoWindow.value = new AMap.InfoWindow({
-        offset: new AMap.Pixel(0, -35),
+      infoWindow.value = new window.AMap.InfoWindow({
+        offset: new window.AMap.Pixel(0, -35),
         closeWhenClickMap: true,
         isCustom: true,
         autoMove: true
@@ -362,7 +455,7 @@ const initMap = async () => {
     } catch (error) {
       console.error('创建信息窗口失败:', error)
       // 使用默认配置重试
-      infoWindow.value = new AMap.InfoWindow({
+      infoWindow.value = new window.AMap.InfoWindow({
         closeWhenClickMap: true,
         isCustom: true
       })
@@ -390,6 +483,7 @@ const initMap = async () => {
     
   } catch (error) {
     console.error('地图初始化失败:', error)
+    mapError.value = error?.message || '请检查高德地图配置和浏览器控制台报错'
     ElMessage.error('地图加载失败: ' + (error.message || '请检查网络连接'))
   } finally {
     loading.value = false
@@ -405,7 +499,7 @@ const verifyLocationWithGeocoder = async (lng, lat) => {
     }
     
     try {
-      const geocoder = new AMap.Geocoder({
+      const geocoder = new window.AMap.Geocoder({
         city: '北京市',
         radius: 500
       })
@@ -439,7 +533,7 @@ const getUserLocation = () => {
     // 优先使用高德地图定位插件（自动处理坐标转换）
     if (window.AMap && window.AMap.Geolocation && map.value) {
       try {
-        const geolocation = new AMap.Geolocation({
+        const geolocation = new window.AMap.Geolocation({
           enableHighAccuracy: true, // 使用高精度定位（GPS）
           timeout: 20000, // 增加到20秒，给更多时间获取精确定位
           maximumAge: 0, // 定位结果缓存0毫秒，每次都重新定位
@@ -777,10 +871,10 @@ const addUserMarker = (lng, lat) => {
     // 简化 Icon 创建，使用 offset 而不是 imageOffset
     let icon
     try {
-      icon = new AMap.Icon({
-        size: new AMap.Size(iconSize, iconSize),
+      icon = new window.AMap.Icon({
+        size: new window.AMap.Size(iconSize, iconSize),
         image: `data:image/svg+xml;base64,${base64}`,
-        imageSize: new AMap.Size(iconSize, iconSize)
+        imageSize: new window.AMap.Size(iconSize, iconSize)
       })
     } catch (iconError) {
       console.error('创建用户位置图标失败，使用默认标记:', iconError)
@@ -791,7 +885,7 @@ const addUserMarker = (lng, lat) => {
       position: [validLng, validLat],
       title: '我的位置',
       zIndex: 1000,
-      offset: new AMap.Pixel(-iconSize / 2, -iconSize) // 使用 offset 将锚点设置在底部中心
+      offset: new window.AMap.Pixel(-iconSize / 2, -iconSize) // 使用 offset 将锚点设置在底部中心
     }
     
     // 只有当图标创建成功时才添加
@@ -799,7 +893,7 @@ const addUserMarker = (lng, lat) => {
       markerConfig.icon = icon
     }
     
-    const marker = new AMap.Marker(markerConfig)
+    const marker = new window.AMap.Marker(markerConfig)
     
     // 标记为用户位置标记
     marker.isUserMarker = true
@@ -931,7 +1025,7 @@ const loadDustbins = async () => {
         
         // 只有在有有效坐标时才设置 bounds
         if (validCoords.length > 0) {
-          const bounds = new AMap.Bounds()
+          const bounds = new window.AMap.Bounds()
           
           // 逐个添加坐标，捕获可能的错误
           for (const coord of validCoords) {
@@ -1069,10 +1163,10 @@ const addDustbinMarker = (dustbin, isNearest = false) => {
     // 创建 Icon，确保所有参数都正确
     let icon
     try {
-      icon = new AMap.Icon({
-        size: new AMap.Size(iconSize, iconSize),
+      icon = new window.AMap.Icon({
+        size: new window.AMap.Size(iconSize, iconSize),
         image: iconUrl,
-        imageSize: new AMap.Size(iconSize, iconSize)
+        imageSize: new window.AMap.Size(iconSize, iconSize)
       })
     } catch (iconError) {
       console.error('创建图标失败，使用默认标记:', iconError)
@@ -1084,7 +1178,7 @@ const addDustbinMarker = (dustbin, isNearest = false) => {
       position: [lng, lat],
       title: dustbin.name || '垃圾桶',
       zIndex: isNearest ? 1000 : 999, // 最近垃圾桶标记层级更高
-      offset: new AMap.Pixel(-iconSize / 2, -iconSize) // 使用 offset 将锚点设置在底部中心
+      offset: new window.AMap.Pixel(-iconSize / 2, -iconSize) // 使用 offset 将锚点设置在底部中心
     }
     
     // 只有当图标创建成功时才添加
@@ -1092,7 +1186,7 @@ const addDustbinMarker = (dustbin, isNearest = false) => {
       markerConfig.icon = icon
     }
 
-    const marker = new AMap.Marker(markerConfig)
+    const marker = new window.AMap.Marker(markerConfig)
 
     // 标记为垃圾桶标记（非用户位置标记）
     marker.isUserMarker = false
@@ -1104,6 +1198,7 @@ const addDustbinMarker = (dustbin, isNearest = false) => {
     // 点击标记显示信息窗口
     marker.on('click', () => {
       showInfoWindow(marker, dustbin)
+      activateDustbinSelection(dustbin)
     })
 
     // 确保地图对象可用后再添加标记
@@ -1160,6 +1255,74 @@ const showInfoWindow = (marker, dustbin) => {
 
 
 // 更新标记颜色
+const loadRouteForDustbin = async (lng, lat, dustbin) => {
+  const validLng = parseFloat(lng)
+  const validLat = parseFloat(lat)
+  const dustbinLng = parseFloat(dustbin?.lng)
+  const dustbinLat = parseFloat(dustbin?.lat)
+
+  if ([validLng, validLat, dustbinLng, dustbinLat].some(value => Number.isNaN(value))) {
+    throw new Error('路线坐标无效')
+  }
+
+  return getDustbinRoute(validLng, validLat, dustbinLng, dustbinLat)
+}
+
+const activateDustbinSelection = async (dustbin) => {
+  if (!dustbin) {
+    return
+  }
+
+  if (!userPosition.value) {
+    ElMessage.warning('请先获取您的位置，再点击选择站点')
+    return
+  }
+
+  activeDustbin.value = dustbin
+  manualSelectedDustbin.value = dustbin
+  
+  nearestInfo.value = {
+    nearby: false,
+    message: '正在获取路线信息...',
+    distance: null,
+    duration: null,
+    dustbin,
+    ...buildDustbinNavigation(dustbin)
+  }
+  updateAllDustbinMarkersColor()
+
+  try {
+    const response = await loadRouteForDustbin(userPosition.value.lng, userPosition.value.lat, dustbin)
+    nearestInfo.value = {
+      ...response.data,
+      dustbin,
+      ...buildDustbinNavigation(dustbin)
+    }
+  } catch (error) {
+    console.error('获取站点路线失败:', error)
+    nearestInfo.value = {
+      nearby: false,
+      distance: null,
+      duration: null,
+      dustbin,
+      ...buildDustbinNavigation(dustbin)
+    }
+  } finally {
+    updateAllDustbinMarkersColor()
+  }
+}
+
+const resetToRecommendedStation = () => {
+  if (!recommendedInfo.value) {
+    ElMessage.warning('暂无最近站点推荐')
+    return
+  }
+
+  manualSelectedDustbin.value = null
+  nearestInfo.value = recommendedInfo.value
+  updateAllDustbinMarkersColor()
+}
+
 const updateMarkerColor = (marker, isNearest) => {
   if (!marker || !window.AMap) return
   
@@ -1167,10 +1330,10 @@ const updateMarkerColor = (marker, isNearest) => {
     const iconSize = 48
     const iconUrl = isNearest ? createRedLocationIcon() : createGreenLocationIcon()
     
-    const icon = new AMap.Icon({
-      size: new AMap.Size(iconSize, iconSize),
+    const icon = new window.AMap.Icon({
+      size: new window.AMap.Size(iconSize, iconSize),
       image: iconUrl,
-      imageSize: new AMap.Size(iconSize, iconSize)
+      imageSize: new window.AMap.Size(iconSize, iconSize)
     })
     
     marker.setIcon(icon)
@@ -1239,6 +1402,20 @@ const loadNearestDustbin = async (lng, lat) => {
     }
     
     const response = await getNearestDustbin(validLng, validLat)
+    recommendedInfo.value = response.data
+
+    if (manualSelectedDustbin.value && sameDustbin(manualSelectedDustbin.value, response.data.dustbin)) {
+      manualSelectedDustbin.value = null
+      nearestInfo.value = response.data
+      updateAllDustbinMarkersColor()
+      return
+    }
+
+    if (manualSelectedDustbin.value) {
+      await activateDustbinSelection(manualSelectedDustbin.value)
+      return
+    }
+
     nearestInfo.value = response.data
 
     // 更新所有垃圾桶标记的颜色（最近垃圾桶显示红色，其他显示绿色）
@@ -1256,7 +1433,7 @@ const handleLocation = () => {
   // 优先使用高德地图定位插件（自动处理坐标转换）
   if (window.AMap && window.AMap.Geolocation && map.value) {
     try {
-      const geolocation = new AMap.Geolocation({
+      const geolocation = new window.AMap.Geolocation({
         enableHighAccuracy: true, // 使用高精度定位（GPS）
         timeout: 20000, // 增加到20秒，给更多时间获取精确定位
         maximumAge: 0, // 不使用缓存，每次都重新定位
@@ -1886,6 +2063,40 @@ onUnmounted(() => {
     white-space: nowrap;
     user-select: none;
   }
+
+  .map-error-panel {
+    position: absolute;
+    inset: 12px;
+    z-index: 120;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .map-error-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #d32f2f;
+  }
+
+  .map-error-text {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .map-fallback-image {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    object-fit: cover;
+  }
 }
 
 // 最近垃圾桶信息卡片（可展开/收起）
@@ -2090,6 +2301,22 @@ onUnmounted(() => {
           font-size: 15px;
           font-weight: 600;
         }
+      }
+
+      &.secondary-actions {
+        margin-top: 10px;
+        padding-top: 0;
+        border-top: none;
+      }
+
+      .reset-nearest-button {
+        width: 100%;
+        height: 40px;
+        border-radius: 8px;
+        border: 1px solid rgba(76, 175, 80, 0.28);
+        color: #2e7d32;
+        background: rgba(76, 175, 80, 0.08);
+        font-weight: 600;
       }
     }
   }
